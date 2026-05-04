@@ -1,9 +1,185 @@
 /* Demo app page background -- not part of the SDK theme system */
 /* Switch to match your active theme preset in App.tsx */
 body {
-  /* background: #0a0a0f; fs-dark / fs-midnight */
-  /* background: #f8fafc; */ /* fs-light */
-  /* background: #ffffff; native-light */
-  background: #111111; /* native-dark */
+  background: #111111;
   margin: 0;
+}
+
+.fs-overlay-panel:has(.wti-cone-trading-layout) {
+  max-width: min(1480px, 96vw);
+}
+
+/* ── Cone Chart Card ── */
+.cone-chart-card {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--fs-border, #243041);
+  border-radius: var(--fs-radius, 8px);
+  background: #070b12 !important;
+  color: var(--fs-text, #f8fafc);
+}
+
+.cone-chart-toolbar {
+  position: absolute;
+  z-index: 5;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1.25rem 0.5rem;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(7,11,18,0.85) 0%, transparent 100%);
+}
+
+.cone-chart-toolbar strong {
+  display: block;
+  max-width: 56ch;
+  color: #f8fafc;
+  font-size: 0.95rem;
+  line-height: 1.25;
+}
+
+.cone-chart-eyebrow {
+  display: block;
+  margin-bottom: 0.2rem;
+  color: #60a5fa;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.cone-chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  color: #cbd5e1;
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.cone-chart-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.legend-swatch {
+  display: inline-block;
+  width: 18px;
+  height: 2px;
+  border-radius: 99px;
+}
+
+.legend-swatch.consensus { background: #3b82f6; }
+.legend-swatch.cone { background: #f97316; }
+.legend-swatch.settlement { background: #c084fc; }
+
+.cone-chart-stage,
+.cone-chart-canvas-host {
+  position: absolute;
+  inset: 0;
+}
+
+.cone-chart-canvas-host {
+  background: #070b12;
+}
+
+.cone-chart-pdf-canvas {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+}
+
+/* ── Settlement line ── */
+.cone-chart-settlement-line {
+  position: absolute;
+  z-index: 4;
+  top: 44px;
+  bottom: 32px;
+  width: 2px;
+  transform: translateX(-1px);
+  background: linear-gradient(180deg, #c084fc 0%, rgba(192,132,252,0.3) 100%);
+  box-shadow: 0 0 0 1px rgba(192, 132, 252, 0.12), 0 0 18px rgba(192, 132, 252, 0.35);
+  pointer-events: none;
+}
+
+.cone-chart-settlement-label {
+  position: absolute;
+  top: -6px;
+  left: 50%;
+  min-width: 92px;
+  transform: translate(-50%, -100%);
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: rgba(192, 132, 252, 0.15);
+  border: 1px solid rgba(192, 132, 252, 0.3);
+  color: #d8b4fe;
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* ── Footer ── */
+.cone-chart-footer {
+  position: absolute;
+  z-index: 5;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.5rem 1rem;
+  color: #94a3b8;
+  font-size: 0.74rem;
+  pointer-events: none;
+  background: linear-gradient(0deg, rgba(7,11,18,0.8) 0%, transparent 100%);
+}
+
+.cone-chart-info-pills {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.cone-info-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.08);
+  font-size: 0.72rem;
+  color: #cbd5e1;
+}
+
+.cone-info-pill strong {
+  color: #f8fafc;
+  font-weight: 600;
+}
+
+.cone-info-pill.consensus-pill {
+  border-color: rgba(59, 130, 246, 0.25);
+  background: rgba(59, 130, 246, 0.08);
+}
+
+.cone-info-pill.cone-pill {
+  border-color: rgba(249, 115, 22, 0.25);
+  background: rgba(249, 115, 22, 0.08);
+}
+
+.cone-draw-hint {
+  font-style: italic;
+  color: #64748b;
+  font-size: 0.7rem;
 }

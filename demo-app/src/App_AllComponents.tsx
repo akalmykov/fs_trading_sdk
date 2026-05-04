@@ -72,7 +72,7 @@ function AllComponentsInner() {
       </div>
 
       <div data-capture="CustomShapeEditor" style={{ marginBottom: '2rem' }}>
-        <CustomShapeEditor marketId={MARKET_ID} height={450} />
+        <CustomShapeEditor marketId={MARKET_ID} />
       </div>
 
       <div data-capture="PositionTable" style={{ marginBottom: '2rem' }}>

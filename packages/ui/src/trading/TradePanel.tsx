@@ -11,9 +11,22 @@ import '../styles/base.css';
 
 export interface TradePanelProps extends TradeInputBaseProps {
   modes?: ('gaussian' | 'range')[];
+  prediction?: number;
+  confidence?: number;
+  onPredictionChange?: (prediction: number) => void;
+  onConfidenceChange?: (confidence: number) => void;
 }
 
-export function TradePanel({ marketId, modes = ['gaussian', 'range'], onBuy, onError }: TradePanelProps) {
+export function TradePanel({
+  marketId,
+  modes = ['gaussian', 'range'],
+  prediction: controlledPrediction,
+  confidence: controlledConfidence,
+  onPredictionChange,
+  onConfidenceChange,
+  onBuy,
+  onError,
+}: TradePanelProps) {
   const ctx = useContext(FunctionSpaceContext);
   if (!ctx) throw new Error('TradePanel must be used within FunctionSpaceProvider');
 
@@ -24,10 +37,27 @@ export function TradePanel({ marketId, modes = ['gaussian', 'range'], onBuy, onE
 
   const [activeMode, setActiveMode] = useState<'gaussian' | 'range'>(modes[0]);
   const [amount, setAmount] = useState('100');
-  const [prediction, setPrediction] = useState<number | null>(null);
-  const [confidence, setConfidence] = useState(50); // 0-100 percentage
+  const [uncontrolledPrediction, setUncontrolledPrediction] = useState<number | null>(null);
+  const [uncontrolledConfidence, setUncontrolledConfidence] = useState(50); // 0-100 percentage
   const [rangeValues, setRangeValues] = useState<[number, number] | null>(null);
   const [potentialPayout, setPotentialPayout] = useState<number | null>(null);
+
+  const prediction = controlledPrediction ?? uncontrolledPrediction;
+  const confidence = controlledConfidence ?? uncontrolledConfidence;
+
+  const setPrediction = useCallback((value: number) => {
+    if (controlledPrediction === undefined) {
+      setUncontrolledPrediction(value);
+    }
+    onPredictionChange?.(value);
+  }, [controlledPrediction, onPredictionChange]);
+
+  const setConfidence = useCallback((value: number) => {
+    if (controlledConfidence === undefined) {
+      setUncontrolledConfidence(value);
+    }
+    onConfidenceChange?.(value);
+  }, [controlledConfidence, onConfidenceChange]);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mountedRef = useRef(true);
@@ -44,7 +74,7 @@ export function TradePanel({ marketId, modes = ['gaussian', 'range'], onBuy, onE
         setRangeValues([lowerBound + range * 0.25, lowerBound + range * 0.75]);
       }
     }
-  }, [market, prediction, rangeValues]);
+  }, [market, prediction, rangeValues, setPrediction]);
 
   useEffect(() => {
     mountedRef.current = true;

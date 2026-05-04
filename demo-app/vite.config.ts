@@ -4,6 +4,15 @@ import path from 'path';
 
 export default defineConfig({
   plugins: [react()],
+  server: {
+    proxy: {
+      '/fred': {
+        target: 'https://fred.stlouisfed.org',
+        changeOrigin: true,
+        rewrite: (requestPath) => requestPath.replace(/^\/fred/, ''),
+      },
+    },
+  },
   resolve: {
     alias: {
       '@functionspace/core': path.resolve(__dirname, '../packages/core/src'),

@@ -10,8 +10,8 @@ export interface PositionTableProps {
   onSell?: (result: SellResult) => void;
   onError?: (error: Error) => void;
   pageSize?: number;
-  selectedPositionId?: number | null;
-  onSelectPosition?: (id: number | null) => void;
+  selectedPositionId?: string | number | null;
+  onSelectPosition?: (id: string | number | null) => void;
   tabs?: PositionTabId[];
 }
 

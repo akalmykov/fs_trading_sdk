@@ -7,7 +7,7 @@ export const config = {
   autoAuthenticate: import.meta.env.VITE_FS_AUTO_AUTH !== 'false',
 };
 
-export const MARKET_ID = import.meta.env.VITE_FS_MARKET_ID;
+export const MARKET_ID = import.meta.env.VITE_FS_MARKET_ID ?? 174;
 
 // ── Theme Options ──
 export const widgetTheme: FSThemeInput = "fs-dark";
