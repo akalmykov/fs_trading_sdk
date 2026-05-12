@@ -227,17 +227,25 @@ export function ConePriceChart({
 
     cs.setData(candles as any);
 
-    // invisible line to extend x-axis past settlement
+    // Anchor series: extend x-axis past settlement AND force Y-axis to cover
+    // the full market price bounds [lb, ub] so that the rotated PDFs at the
+    // settlement line are visible and proportional.
+    const buf = addDays(settlementDate, 40);
+    const latDate = candles[candles.length - 1].time;
+    const yPadding = (ub - lb) * 0.04; // small padding so bounds aren't clipped
+
     const ext = chart.addSeries(LineSeries, {
       color: 'rgba(0,0,0,0)', lineWidth: 1,
       priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false,
-      autoscaleInfoProvider: () => null,
+      // THIS is the key: provide custom autoscale info that forces
+      // the price axis to cover the full market bounds
+      autoscaleInfoProvider: () => ({
+        priceRange: { minValue: lb - yPadding, maxValue: ub + yPadding },
+      }),
     });
-    const buf = addDays(settlementDate, 40);
-    const latDate = candles[candles.length - 1].time;
     ext.setData([
-      { time: latDate as any, value: candles[candles.length - 1].close },
-      { time: buf as any, value: candles[candles.length - 1].close },
+      { time: latDate as any, value: lb },
+      { time: buf as any, value: ub },
     ]);
     hiddenExtRef.current = ext;
 
@@ -249,7 +257,7 @@ export function ConePriceChart({
     });
 
     return () => { chart.removeSeries(ext); hiddenExtRef.current = null; };
-  }, [candles, settlementDate]);
+  }, [candles, settlementDate, lb, ub]);
 
   /* ── draw cone overlay ── */
   useEffect(() => {
@@ -338,45 +346,59 @@ export function ConePriceChart({
     const points = consensus.points;
     if (points.length === 0) return;
 
-    // We draw the PDF rotated: x-axis of PDF becomes vertical (price axis), y-axis of PDF becomes horizontal (going left from settlement line)
+    // We draw the PDF rotated: x-axis of PDF becomes vertical (price axis),
+    // y-axis of PDF becomes horizontal (going left from settlement line).
+    // Both distributions are normalised to their own peak → same visual max width,
+    // so neither one looks "too tall" or "too flat".
     const maxDensity = Math.max(...points.map(p => p.y));
     if (maxDensity <= 0) return;
 
-    const pdfWidth = 120; // max horizontal pixels the PDF curve extends
+    const pdfWidth = 140; // max horizontal pixels the PDF curve extends
 
-    // Map price (outcome) → pixel Y using the chart's price scale
     const cs = candleRef.current;
     if (!cs) return;
 
     const sx = settlementX;
 
-    // Draw consensus PDF (blue, filled)
-    ctx2d.beginPath();
-    ctx2d.moveTo(sx, 0);
-    let started = false;
-    for (const pt of points) {
-      const py = cs.priceToCoordinate(pt.x);
-      if (py === null || !Number.isFinite(py)) continue;
-      const px = sx - (pt.y / maxDensity) * pdfWidth;
-      if (!started) { ctx2d.moveTo(sx, py); started = true; }
-      ctx2d.lineTo(px, py);
-    }
-    // close back to the settlement line
-    const lastPt = points[points.length - 1];
-    const lastPy = cs.priceToCoordinate(lastPt.x);
-    if (lastPy !== null) ctx2d.lineTo(sx, lastPy);
-    ctx2d.closePath();
-    ctx2d.fillStyle = CONSENSUS_PDF_COLOR;
-    ctx2d.fill();
-    ctx2d.strokeStyle = CONSENSUS_PDF_LINE;
-    ctx2d.lineWidth = 2;
-    ctx2d.stroke();
+    // Helper: draw a single rotated PDF
+    const drawPdf = (
+      pts: { x: number; y: number }[],
+      peak: number,
+      fillStyle: string,
+      strokeStyle: string,
+      dash?: number[],
+    ) => {
+      if (peak <= 0) return;
+      ctx2d.save();
+      ctx2d.beginPath();
+      if (dash) ctx2d.setLineDash(dash);
+      let started = false;
+      for (const pt of pts) {
+        const py = cs.priceToCoordinate(pt.x);
+        if (py === null || !Number.isFinite(py)) continue;
+        // Normalise to OWN peak so every PDF fills the same max width
+        const px = sx - (pt.y / peak) * pdfWidth;
+        if (!started) { ctx2d.moveTo(sx, py); started = true; }
+        ctx2d.lineTo(px, py);
+      }
+      const last = pts[pts.length - 1];
+      const ly = cs.priceToCoordinate(last.x);
+      if (ly !== null) ctx2d.lineTo(sx, ly);
+      ctx2d.closePath();
+      ctx2d.fillStyle = fillStyle;
+      ctx2d.fill();
+      ctx2d.strokeStyle = strokeStyle;
+      ctx2d.lineWidth = 2;
+      ctx2d.stroke();
+      ctx2d.restore();
+    };
 
-    // Draw user Gaussian PDF (orange, dashed) if prediction is set
+    // Draw consensus PDF (blue)
+    drawPdf(points, maxDensity, CONSENSUS_PDF_COLOR, CONSENSUS_PDF_LINE);
+
+    // Draw user Gaussian PDF (orange, dashed)
     if (prediction !== null && bounds) {
       const sigma = confidenceToStdDev(confidence, lb, ub);
-      const numBuckets = bounds.numBuckets;
-      // Use a simple Gaussian curve for display (not generateGaussian which returns belief vector)
       const userPoints: { x: number; y: number }[] = [];
       const step = (ub - lb) / 200;
       for (let x = lb; x <= ub; x += step) {
@@ -385,33 +407,13 @@ export function ConePriceChart({
         userPoints.push({ x, y });
       }
       const userMax = Math.max(...userPoints.map(p => p.y));
-      if (userMax > 0) {
-        ctx2d.beginPath();
-        ctx2d.setLineDash([6, 4]);
-        let startedUser = false;
-        ctx2d.moveTo(sx, 0);
-        for (const pt of userPoints) {
-          const py = cs.priceToCoordinate(pt.x);
-          if (py === null || !Number.isFinite(py)) continue;
-          const px = sx - (pt.y / maxDensity) * pdfWidth; // share scale with consensus
-          if (!startedUser) { ctx2d.moveTo(sx, py); startedUser = true; }
-          ctx2d.lineTo(px, py);
-        }
-        const lup = userPoints[userPoints.length - 1];
-        const lupy = cs.priceToCoordinate(lup.x);
-        if (lupy !== null) ctx2d.lineTo(sx, lupy);
-        ctx2d.closePath();
-        ctx2d.fillStyle = USER_PDF_COLOR;
-        ctx2d.fill();
-        ctx2d.strokeStyle = USER_PDF_LINE;
-        ctx2d.lineWidth = 2;
-        ctx2d.stroke();
-        ctx2d.setLineDash([]);
-      }
+      drawPdf(userPoints, userMax, USER_PDF_COLOR, USER_PDF_LINE, [6, 4]);
     }
   }, [settlementX, consensus, bounds, prediction, confidence, lb, ub, candles]);
 
   /* ── interactive cone drawing ── */
+  // Dragging in the future zone only adjusts the PREDICTION (center line).
+  // Confidence (cone width) is preserved from the slider.
   useEffect(() => {
     const chart = chartApiRef.current;
     const el = containerRef.current;
@@ -442,7 +444,6 @@ export function ConePriceChart({
       const price = cs.coordinateToPrice(e.clientY - rect.top);
       if (price === null) return;
 
-      // Current mouse position determines cone width at settlement
       const settCoord = chart.timeScale().timeToCoordinate(settlementDate as any);
       const latCoord = chart.timeScale().timeToCoordinate(latDate as any);
       if (settCoord === null || latCoord === null) return;
@@ -455,13 +456,8 @@ export function ConePriceChart({
       const meanAtSettlement = latest.close + (price - latest.close) / frac;
       const clampedMean = clamp(meanAtSettlement, lb, ub);
 
-      // cone half-width at current position → sigma at settlement
-      const halfWidthAtMouse = Math.abs(price - (latest.close + (clampedMean - latest.close) * frac));
-      const sigmaAtSettlement = halfWidthAtMouse / frac;
-      const clampedSigma = clamp(sigmaAtSettlement, (ub - lb) * 0.01, (ub - lb) * 0.20);
-
+      // Only update prediction — confidence stays as-is from the slider
       onPredictionChange(+clampedMean.toFixed(2));
-      onConfidenceChange(Math.round(stdDevToConfidence(clampedSigma, lb, ub)));
     };
 
     const handleMouseUp = () => {
@@ -478,7 +474,7 @@ export function ConePriceChart({
       el.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [latest, bounds, settlementDate, lb, ub, onPredictionChange, onConfidenceChange]);
+  }, [latest, bounds, settlementDate, lb, ub, onPredictionChange]);
 
   /* ── resize canvas to match container ── */
   useEffect(() => {
