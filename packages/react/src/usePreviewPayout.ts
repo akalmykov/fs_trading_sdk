@@ -5,7 +5,7 @@ import { FunctionSpaceContext } from './context.js';
 import { useQueryCache } from './QueryCacheContext.js';
 
 export interface UsePreviewPayoutReturn {
-  execute: (belief: BeliefVector, collateral: number) => Promise<PayoutCurve>;
+  execute: (belief: BeliefVector, collateral: number, numOutcomes?: number) => Promise<PayoutCurve>;
   loading: boolean;
   error: Error | null;
   reset: () => void;
@@ -36,7 +36,11 @@ export function usePreviewPayout(marketId: string | number): UsePreviewPayoutRet
     }
   }, []);
 
-  const execute = useCallback(async (belief: BeliefVector, collateral: number): Promise<PayoutCurve> => {
+  const execute = useCallback(async (
+    belief: BeliefVector,
+    collateral: number,
+    numOutcomes?: number,
+  ): Promise<PayoutCurve> => {
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
@@ -49,7 +53,7 @@ export function usePreviewPayout(marketId: string | number): UsePreviewPayoutRet
       const numBuckets = marketSnapshot.data?.config?.numBuckets;
       if (!numBuckets) throw new Error('Market data not loaded. Cannot determine numBuckets for validation.');
 
-      const result = await previewPayoutCurve(client, marketId, belief, collateral, numBuckets, undefined, { signal: controller.signal });
+      const result = await previewPayoutCurve(client, marketId, belief, collateral, numBuckets, numOutcomes, { signal: controller.signal });
       return result;
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') throw err;
@@ -61,7 +65,8 @@ export function usePreviewPayout(marketId: string | number): UsePreviewPayoutRet
       }, 5000);
       throw error;
     } finally {
-      if (!controller.signal.aborted) {
+      if (abortRef.current === controller) {
+        abortRef.current = null;
         setLoading(false);
       }
     }

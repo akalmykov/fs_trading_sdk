@@ -183,3 +183,426 @@ body {
   color: #64748b;
   font-size: 0.7rem;
 }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   Brick-Drop Distribution Builder
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+.brick-drop-card {
+  background: #0d1117;
+  border: 1px solid #1e293b;
+  border-radius: 12px;
+  padding: 1.25rem;
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+  outline: none;
+  overflow: hidden;
+}
+
+.brick-drop-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.brick-drop-header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.brick-drop-lego-icon { font-size: 1.3rem; }
+
+.brick-drop-title {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #f1f5f9;
+}
+
+.brick-drop-new-badge {
+  font-size: 0.6rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: #22c55e;
+  color: #000;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.brick-drop-how-btn {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  color: #94a3b8;
+  padding: 4px 10px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.brick-drop-how-btn:hover { background: #334155; color: #e2e8f0; }
+
+.brick-drop-body {
+  display: flex;
+  gap: 1.25rem;
+  align-items: flex-start;
+}
+
+.brick-drop-grid-area { flex: 1; min-width: 0; }
+
+.brick-drop-subtitle {
+  margin: 0 0 0.75rem;
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+.brick-drop-y-axis-label {
+  font-size: 0.65rem;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+/* ── Grid ── */
+.brick-grid {
+  display: flex;
+  gap: 3px;
+  align-items: stretch;
+  min-height: 292px;
+}
+
+.brick-column {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  cursor: pointer;
+  position: relative;
+  border-radius: 4px;
+  padding: 2px;
+  box-sizing: border-box;
+  min-width: 0;
+}
+.brick-column:hover,
+.brick-column.hovered { background: rgba(59, 130, 246, 0.06); }
+.brick-column.locked { cursor: default; }
+
+.brick-target-indicator {
+  color: #60a5fa;
+  font-size: 0.7rem;
+  height: 14px;
+  line-height: 14px;
+  text-align: center;
+}
+
+.brick-payout-label {
+  font-size: 0.65rem;
+  font-weight: 600;
+  height: 14px;
+  line-height: 14px;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Stack ── */
+.brick-stack {
+  position: relative;
+  width: 100%;
+  min-width: 28px;
+  transition: height 0.18s ease;
+}
+
+.consensus-heat-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(to top, rgba(59, 130, 246, 0.5), rgba(59, 130, 246, 0.15));
+  border-radius: 2px;
+  pointer-events: none;
+  border-top: 2px solid rgba(59, 130, 246, 0.6);
+}
+
+/* ── Individual Brick ── */
+.brick {
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  height: 24px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.brick:hover { z-index: 2; filter: brightness(1.2); }
+
+.brick-inner-shine {
+  position: absolute;
+  inset: 2px;
+  border-radius: 3px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.15) 0%, transparent 60%);
+  pointer-events: none;
+}
+
+/* ── Falling animation ── */
+.brick.falling {
+  animation: brickFall 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+@keyframes brickFall {
+  0% { transform: translateY(-180px); opacity: 0.6; }
+  70% { transform: translateY(4px); opacity: 1; }
+  85% { transform: translateY(-2px); }
+  100% { transform: translateY(0); opacity: 1; }
+}
+
+/* ── Pulse animation (submit lock-in) ── */
+.brick.pulse {
+  animation: brickPulse 0.8s ease-in-out;
+}
+@keyframes brickPulse {
+  0%, 100% { transform: scale(1); filter: brightness(1); }
+  50% { transform: scale(1.12); filter: brightness(1.4); }
+}
+
+/* ── Column label ── */
+.brick-column-label {
+  font-size: 0.6rem;
+  color: #475569;
+  margin-top: 6px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* ── X-axis label ── */
+.brick-drop-x-axis-label {
+  text-align: center;
+  font-size: 0.7rem;
+  color: #475569;
+  margin-top: 8px;
+}
+
+/* ── Legend ── */
+.brick-drop-legend {
+  display: flex;
+  gap: 1.5rem;
+  margin-top: 0.75rem;
+  font-size: 0.7rem;
+  color: #64748b;
+}
+.legend-item { display: flex; align-items: center; gap: 5px; }
+.legend-swatch-brick {
+  display: inline-block;
+  width: 14px;
+  height: 10px;
+  border-radius: 2px;
+}
+.legend-dots { color: #3b82f6; letter-spacing: -1px; }
+
+/* ── Info bar ── */
+.brick-drop-info-bar {
+  margin-top: 0.5rem;
+  font-size: 0.68rem;
+  color: #475569;
+  padding: 6px 10px;
+  background: rgba(30, 41, 59, 0.4);
+  border-radius: 6px;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   Brick-Drop Sidebar
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+.brick-drop-sidebar {
+  width: 260px;
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.brick-sidebar-section {
+  background: #131a24;
+  border: 1px solid #1e293b;
+  border-radius: 8px;
+  padding: 0.75rem;
+}
+
+.brick-sidebar-label {
+  display: block;
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  margin-bottom: 6px;
+}
+
+.brick-stake-input-wrap {
+  position: relative;
+}
+.brick-stake-input {
+  width: 100%;
+  background: #0d1117;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  color: #f1f5f9;
+  padding: 8px 10px;
+  font-size: 0.9rem;
+  box-sizing: border-box;
+}
+.brick-stake-input:focus { outline: none; border-color: #3b82f6; }
+.brick-stake-icon {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.9rem;
+}
+.brick-stake-hint {
+  font-size: 0.6rem;
+  color: #475569;
+  margin-top: 4px;
+  display: block;
+}
+
+/* Bricks remaining */
+.brick-remaining-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.brick-remaining-count { font-size: 1.1rem; color: #f1f5f9; }
+.brick-remaining-sub { font-size: 0.7rem; color: #64748b; }
+.brick-remaining-bar {
+  height: 6px;
+  background: #1e293b;
+  border-radius: 3px;
+  margin-top: 8px;
+  overflow: hidden;
+}
+.brick-remaining-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #3b82f6, #60a5fa);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+/* Current bucket */
+.brick-current-bucket {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 48px;
+  justify-content: center;
+}
+.brick-bucket-value {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 1rem;
+  color: #f1f5f9;
+}
+.brick-bucket-units { font-size: 0.7rem; color: #64748b; }
+.brick-target-badge {
+  font-size: 0.55rem;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: #f59e0b;
+  color: #000;
+}
+.brick-bucket-payout { font-size: 0.75rem; color: #94a3b8; min-height: 18px; }
+.brick-bucket-empty {
+  display: flex;
+  align-items: center;
+  min-height: 48px;
+  font-size: 0.75rem;
+  color: #475569;
+  font-style: italic;
+}
+
+/* Payout preview */
+.brick-payout-section { text-align: center; min-height: 84px; }
+.brick-payout-big { font-size: 1.6rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.brick-payout-sub { font-size: 0.7rem; color: #64748b; display: block; margin-top: 2px; }
+
+/* Controls */
+.brick-controls { background: transparent; border: none; padding: 0.5rem 0.75rem; }
+.brick-control-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.7rem;
+  color: #64748b;
+  margin-bottom: 4px;
+}
+.brick-control-row kbd {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 3px;
+  padding: 1px 5px;
+  font-size: 0.65rem;
+  color: #94a3b8;
+  font-family: monospace;
+}
+.brick-mouse-icon { font-size: 0.85rem; }
+
+/* Lock status */
+.brick-lock-status { background: transparent; border: none; padding: 0; }
+.brick-locked-badge {
+  text-align: center;
+  font-size: 0.75rem;
+  color: #22c55e;
+  font-weight: 600;
+  padding: 6px;
+  background: rgba(34, 197, 94, 0.08);
+  border: 1px solid rgba(34, 197, 94, 0.2);
+  border-radius: 6px;
+}
+.brick-unlocked-badge {
+  text-align: center;
+  font-size: 0.7rem;
+  color: #64748b;
+}
+
+/* Submit button */
+.brick-submit-btn {
+  width: 100%;
+  padding: 12px;
+  border: none;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s, transform 0.1s;
+}
+.brick-submit-btn:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); }
+.brick-submit-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.brick-submit-success {
+  text-align: center;
+  font-size: 0.85rem;
+  color: #22c55e;
+  font-weight: 600;
+  padding: 12px;
+}
+
+.brick-error {
+  font-size: 0.7rem;
+  color: #ef4444;
+  margin-top: 4px;
+  text-align: center;
+}
+
+.brick-fine-print {
+  font-size: 0.6rem;
+  color: #374151;
+  text-align: center;
+  display: block;
+}

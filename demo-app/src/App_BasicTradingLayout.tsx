@@ -4,6 +4,7 @@ import { ConsensusChart, TradePanel, MarketStats, PositionTable, PasswordlessAut
 import { ArticlePage } from './pages/ArticlePage';
 import { config, MARKET_ID, widgetTheme } from './App';
 import { ConePriceChart } from './components/ConePriceChart';
+import { BrickDropBuilder } from './components/BrickDropBuilder';
 
 const CHART_RATIO = 7
 const PANEL_RATIO = 3;
@@ -11,8 +12,10 @@ const PANEL_RATIO = 3;
 // Reusable layout content (used by both demo-app and docs site)
 export function BasicTradingLayout({ marketId }: { marketId: string | number }) {
   const isWtiConeMarket = Number(marketId) === 174;
+  const isTeslaOptimusMarket = Number(marketId) === 212;
   const [prediction, setPrediction] = useState<number | null>(null);
   const [confidence, setConfidence] = useState(65);
+  const [showTeslaPositions, setShowTeslaPositions] = useState(false);
   const predictionInitRef = useRef(false);
 
   const handleLatestClose = useCallback((latestClose: number) => {
@@ -20,6 +23,34 @@ export function BasicTradingLayout({ marketId }: { marketId: string | number }) 
     predictionInitRef.current = true;
     setPrediction(latestClose);
   }, []);
+
+  if (isTeslaOptimusMarket) {
+    return (
+      <div>
+        <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
+          <div style={{ flex: 7, minWidth: 0 }}>
+            <MarketStats marketId={marketId} />
+          </div>
+          <div style={{ flex: 3, minWidth: 0 }}>
+            <PasswordlessAuthWidget />
+          </div>
+        </div>
+        <BrickDropBuilder marketId={marketId} />
+        {showTeslaPositions ? (
+          <PositionTable marketId={marketId} tabs={['open-orders', 'trade-history', 'market-positions']} />
+        ) : (
+          <div className="brick-positions-deferred">
+            <button className="brick-load-positions-btn" onClick={() => setShowTeslaPositions(true)}>
+              Load positions
+            </button>
+            <span>
+              Position history can take a while on this market because the API returns every market position.
+            </span>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className={isWtiConeMarket ? 'wti-cone-trading-layout' : undefined}>
