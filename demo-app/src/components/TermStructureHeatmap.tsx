@@ -173,31 +173,6 @@ function HeatmapRowCanvas({
       ctx.lineWidth = isSelected ? 2 : 1;
       ctx.strokeRect(0, 0.5, w - 0.5, ROW_HEIGHT - 1);
     }
-
-    // Consensus mean dot
-    const meanX = ((row.mean - lb) / (ub - lb)) * w;
-    const dotY = ROW_HEIGHT / 2;
-
-    const grad = ctx.createRadialGradient(meanX, dotY, 0, meanX, dotY, 12);
-    grad.addColorStop(0, 'rgba(255,255,255,0.5)');
-    grad.addColorStop(1, 'rgba(255,255,255,0)');
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.arc(meanX, dotY, 12, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.beginPath();
-    ctx.arc(meanX, dotY, 5, 0, Math.PI * 2);
-    ctx.fillStyle = '#fff';
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(0,0,0,0.7)';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.arc(meanX, dotY, 2, 0, Math.PI * 2);
-    ctx.fillStyle = '#ff4444';
-    ctx.fill();
   }, [row, isSelected, isHovered, lb, ub]);
 
   return (
@@ -212,6 +187,118 @@ function HeatmapRowCanvas({
 /* ── Component ── */
 export interface TermStructureHeatmapProps {
   marketId: string | number;
+}
+
+/* ── Synthetic PDF Chart (static canvas rendering) ── */
+function SyntheticPdfChart({ curve, lb, ub, height }: { curve: { x: number; y: number }[]; lb: number; ub: number; height: number }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const ctx = React.useContext(FunctionSpaceContext as unknown as React.Context<FSContext | null>);
+  const previewBelief = ctx?.previewBelief ?? null;
+
+  const previewCurve = useMemo(() => {
+    if (!previewBelief) return null;
+    return evaluateDensityCurve(previewBelief, lb, ub, 200);
+  }, [previewBelief, lb, ub]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || curve.length === 0) return;
+    const dpr = window.devicePixelRatio || 1;
+    const w = canvas.clientWidth;
+    canvas.width = w * dpr;
+    canvas.height = height * dpr;
+    canvas.style.height = `${height}px`;
+    const c = canvas.getContext('2d');
+    if (!c) return;
+    c.scale(dpr, dpr);
+
+    const pad = { top: 20, bottom: 30, left: 10, right: 10 };
+    const plotW = w - pad.left - pad.right;
+    const plotH = height - pad.top - pad.bottom;
+
+    // Compute shared maxY across both curves for consistent scale
+    let maxY = Math.max(...curve.map(p => p.y));
+    if (previewCurve) maxY = Math.max(maxY, ...previewCurve.map(p => p.y));
+
+    c.fillStyle = '#0d1117';
+    c.fillRect(0, 0, w, height);
+
+    c.strokeStyle = 'rgba(88,101,128,0.2)';
+    c.lineWidth = 1;
+    for (let i = 0; i <= 4; i++) {
+      const y = pad.top + (plotH / 4) * i;
+      c.beginPath(); c.moveTo(pad.left, y); c.lineTo(w - pad.right, y); c.stroke();
+    }
+
+    // Consensus fill
+    c.beginPath();
+    c.moveTo(pad.left, pad.top + plotH);
+    for (const pt of curve) {
+      c.lineTo(pad.left + ((pt.x - lb) / (ub - lb)) * plotW, pad.top + plotH - (pt.y / maxY) * plotH);
+    }
+    c.lineTo(pad.left + plotW, pad.top + plotH);
+    c.closePath();
+    c.fillStyle = 'rgba(59, 130, 246, 0.2)';
+    c.fill();
+
+    // Consensus stroke
+    c.beginPath();
+    for (let i = 0; i < curve.length; i++) {
+      const px = pad.left + ((curve[i].x - lb) / (ub - lb)) * plotW;
+      const py = pad.top + plotH - (curve[i].y / maxY) * plotH;
+      if (i === 0) c.moveTo(px, py); else c.lineTo(px, py);
+    }
+    c.strokeStyle = '#3b82f6';
+    c.lineWidth = 2;
+    c.stroke();
+
+    // Preview belief curve (dashed orange)
+    if (previewCurve) {
+      c.beginPath();
+      c.moveTo(pad.left, pad.top + plotH);
+      for (const pt of previewCurve) {
+        c.lineTo(pad.left + ((pt.x - lb) / (ub - lb)) * plotW, pad.top + plotH - (pt.y / maxY) * plotH);
+      }
+      c.lineTo(pad.left + plotW, pad.top + plotH);
+      c.closePath();
+      c.fillStyle = 'rgba(249, 115, 22, 0.12)';
+      c.fill();
+
+      c.beginPath();
+      for (let i = 0; i < previewCurve.length; i++) {
+        const px = pad.left + ((previewCurve[i].x - lb) / (ub - lb)) * plotW;
+        const py = pad.top + plotH - (previewCurve[i].y / maxY) * plotH;
+        if (i === 0) c.moveTo(px, py); else c.lineTo(px, py);
+      }
+      c.setLineDash([6, 4]);
+      c.strokeStyle = '#f97316';
+      c.lineWidth = 2;
+      c.stroke();
+      c.setLineDash([]);
+    }
+
+    // X-axis labels
+    c.fillStyle = '#64748b';
+    c.font = '11px Inter, sans-serif';
+    c.textAlign = 'center';
+    const step = ub <= 10000 ? 1000 : ub <= 50000 ? 10000 : ub <= 500000 ? 50000 : 100000;
+    for (let v = 0; v <= ub; v += step) {
+      const px = pad.left + ((v - lb) / (ub - lb)) * plotW;
+      c.fillText(`$${v >= 1000 ? Math.round(v/1000) + 'K' : v}`, px, height - 8);
+    }
+
+    c.fillStyle = '#94a3b8';
+    c.font = '12px Inter, sans-serif';
+    c.textAlign = 'left';
+    c.fillText('Synthetic Consensus PDF', pad.left + 4, pad.top - 6);
+  }, [curve, lb, ub, height, previewCurve]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      style={{ width: '100%', height, display: 'block', borderRadius: 8, border: '1px solid #1e293b' }}
+    />
+  );
 }
 
 /* ── Belief bracket (drawn below selected heatmap row) ── */
@@ -383,7 +470,11 @@ export function TermStructureHeatmap({ marketId }: TermStructureHeatmapProps) {
                   <div className="heatmap-detail-body">
                     <div className="heatmap-detail-real">
                       <div style={{ flex: 7, minWidth: 0 }}>
-                        <ConsensusChart marketId={marketId} height={340} zoomable />
+                        {row.isReal ? (
+                          <ConsensusChart marketId={marketId} height={340} zoomable />
+                        ) : (
+                          <SyntheticPdfChart curve={row.densityCurve} lb={lb} ub={ub} height={340} />
+                        )}
                       </div>
                       <div style={{ flex: 3, minWidth: 0 }}>
                         <TradePanel marketId={marketId} modes={['gaussian', 'range']} />
