@@ -5,6 +5,7 @@ import { ArticlePage } from './pages/ArticlePage';
 import { config, MARKET_ID, widgetTheme } from './App';
 import { ConePriceChart } from './components/ConePriceChart';
 import { BrickDropBuilder } from './components/BrickDropBuilder';
+import { TermStructureHeatmap } from './components/TermStructureHeatmap';
 
 const CHART_RATIO = 7
 const PANEL_RATIO = 3;
@@ -13,6 +14,7 @@ const PANEL_RATIO = 3;
 export function BasicTradingLayout({ marketId }: { marketId: string | number }) {
   const isWtiConeMarket = Number(marketId) === 174;
   const isTeslaOptimusMarket = Number(marketId) === 212;
+  const isBtcHeatmapMarket = Number(marketId) === 242;
   const [prediction, setPrediction] = useState<number | null>(null);
   const [confidence, setConfidence] = useState(65);
   const [showTeslaPositions, setShowTeslaPositions] = useState(false);
@@ -23,6 +25,25 @@ export function BasicTradingLayout({ marketId }: { marketId: string | number }) 
     predictionInitRef.current = true;
     setPrediction(latestClose);
   }, []);
+
+  if (isBtcHeatmapMarket) {
+    return (
+      <div>
+        <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
+          <div style={{ flex: 7, minWidth: 0 }}>
+            <MarketStats marketId={marketId} />
+          </div>
+          <div style={{ flex: 3, minWidth: 0 }}>
+            <PasswordlessAuthWidget />
+          </div>
+        </div>
+        <TermStructureHeatmap marketId={marketId} />
+        <div style={{ marginTop: '1rem' }}>
+          <PositionTable marketId={marketId} tabs={['open-orders', 'trade-history', 'market-positions']} />
+        </div>
+      </div>
+    );
+  }
 
   if (isTeslaOptimusMarket) {
     return (
