@@ -897,6 +897,42 @@ body {
 }
 
 /* ── Inline detail panel (expands between rows) ── */
+
+.heatmap-belief-bracket {
+  position: relative;
+  height: 18px;
+  margin-left: 90px; /* align with canvas area (matches row label width) */
+  margin-right: 0;
+}
+
+.heatmap-bracket-line {
+  position: absolute;
+  top: 50%;
+  height: 2px;
+  background: #f59e0b;
+  transform: translateY(-50%);
+}
+
+.heatmap-bracket-tick {
+  position: absolute;
+  top: 50%;
+  width: 2px;
+  height: 10px;
+  background: #f59e0b;
+  transform: translate(-50%, -50%);
+}
+
+.heatmap-bracket-dot {
+  position: absolute;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #f59e0b;
+  border: 1.5px solid rgba(0, 0, 0, 0.6);
+  transform: translate(-50%, -50%);
+}
+
 .heatmap-inline-detail {
   max-height: 0;
   overflow: hidden;

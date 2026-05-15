@@ -2,9 +2,12 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   useMarket,
   useConsensus,
+  FunctionSpaceContext,
 } from '@functionspace/react';
+import type { FSContext } from '@functionspace/react';
 import {
   computeStatistics,
+  computePercentiles,
   evaluateDensityCurve,
   generateGaussian,
 } from '@functionspace/core';
@@ -117,9 +120,8 @@ function HeatmapRowCanvas({
     if (!ctx) return;
     ctx.scale(dpr, dpr);
 
-    const cellW = w / HEATMAP_COLS;
-
     // Paint thermal heatmap with Gaussian blur kernel
+    const cellW = w / HEATMAP_COLS;
     for (let col = 0; col < HEATMAP_COLS; col++) {
       let blurred = 0;
       let weightSum = 0;
@@ -150,7 +152,6 @@ function HeatmapRowCanvas({
     const meanX = ((row.mean - lb) / (ub - lb)) * w;
     const dotY = ROW_HEIGHT / 2;
 
-    // Outer glow
     const grad = ctx.createRadialGradient(meanX, dotY, 0, meanX, dotY, 12);
     grad.addColorStop(0, 'rgba(255,255,255,0.5)');
     grad.addColorStop(1, 'rgba(255,255,255,0)');
@@ -159,7 +160,6 @@ function HeatmapRowCanvas({
     ctx.arc(meanX, dotY, 12, 0, Math.PI * 2);
     ctx.fill();
 
-    // White dot with dark outline
     ctx.beginPath();
     ctx.arc(meanX, dotY, 5, 0, Math.PI * 2);
     ctx.fillStyle = '#fff';
@@ -168,7 +168,6 @@ function HeatmapRowCanvas({
     ctx.lineWidth = 2;
     ctx.stroke();
 
-    // Inner dot
     ctx.beginPath();
     ctx.arc(meanX, dotY, 2, 0, Math.PI * 2);
     ctx.fillStyle = '#ff4444';
@@ -179,7 +178,7 @@ function HeatmapRowCanvas({
     <canvas
       ref={canvasRef}
       className="heatmap-canvas"
-      style={{ width: '100%', height: ROW_HEIGHT, display: 'block' }}
+      style={{ width: '100%', display: 'block' }}
     />
   );
 }
@@ -189,15 +188,45 @@ export interface TermStructureHeatmapProps {
   marketId: string | number;
 }
 
+/* ── Belief bracket (drawn below selected heatmap row) ── */
+function BeliefBracket({ lb, ub, userBelief }: { lb: number; ub: number; userBelief: { mean: number; p10: number; p90: number } }) {
+  const p10Pct = ((userBelief.p10 - lb) / (ub - lb)) * 100;
+  const p90Pct = ((userBelief.p90 - lb) / (ub - lb)) * 100;
+  const meanPct = ((userBelief.mean - lb) / (ub - lb)) * 100;
+
+  return (
+    <div className="heatmap-belief-bracket">
+      {/* Horizontal line */}
+      <div className="heatmap-bracket-line" style={{ left: `${p10Pct}%`, width: `${p90Pct - p10Pct}%` }} />
+      {/* Left tick */}
+      <div className="heatmap-bracket-tick" style={{ left: `${p10Pct}%` }} />
+      {/* Right tick */}
+      <div className="heatmap-bracket-tick" style={{ left: `${p90Pct}%` }} />
+      {/* Mean dot */}
+      <div className="heatmap-bracket-dot" style={{ left: `${meanPct}%` }} />
+    </div>
+  );
+}
+
 export function TermStructureHeatmap({ marketId }: TermStructureHeatmapProps) {
   const { market } = useMarket(marketId);
   const { consensus } = useConsensus(marketId, 300);
+  const ctx = React.useContext(FunctionSpaceContext as unknown as React.Context<FSContext | null>);
   const [selectedRow, setSelectedRow] = useState<number | null>(null);
   const [hoverRow, setHoverRow] = useState<number | null>(null);
 
   const lb = market?.config?.lowerBound ?? 0;
   const ub = market?.config?.upperBound ?? 200000;
   const numBuckets = market?.config?.numBuckets ?? 80;
+
+  /* ── Compute user belief bracket from preview ── */
+  const userBelief = useMemo(() => {
+    const belief = ctx?.previewBelief;
+    if (!belief || !market) return null;
+    const stats = computeStatistics(belief, lb, ub);
+    const pctiles = computePercentiles(belief, lb, ub);
+    return { mean: stats.mean, p10: pctiles.p12_5, p90: pctiles.p87_5 };
+  }, [ctx?.previewBelief, market, lb, ub]);
 
   /* ── Build row data from real consensus + synthetic ── */
   const rows = useMemo<RowData[]>(() => {
@@ -304,6 +333,11 @@ export function TermStructureHeatmap({ marketId }: TermStructureHeatmapProps) {
                 />
               </div>
             </div>
+
+            {/* User belief bracket — below selected row, above detail panel */}
+            {i === selectedRow && userBelief && (
+              <BeliefBracket lb={lb} ub={ub} userBelief={userBelief} />
+            )}
 
             {/* Inline detail panel — expands between rows */}
             <div className={`heatmap-inline-detail ${i === selectedRow ? 'open' : ''}`}>
