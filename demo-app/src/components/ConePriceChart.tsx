@@ -198,6 +198,8 @@ export function ConePriceChart({
         fixLeftEdge: false,
         fixRightEdge: false,
       },
+      handleScroll: false,
+      handleScale: false,
       crosshair: { mode: 0 },
     });
 
