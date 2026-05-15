@@ -9,8 +9,9 @@ import {
   computeStatistics,
   computePercentiles,
   evaluateDensityCurve,
-  generateGaussian,
+  generateBelief,
 } from '@functionspace/core';
+import type { Region } from '@functionspace/core';
 import { ConsensusChart, TradePanel } from '@functionspace/ui';
 
 /* ── Thermal colormap ── */
@@ -54,17 +55,42 @@ interface ExpiryRow {
   year: number;
   label: string;
   sublabel: string;
-  meanShift: number;    // multiply the real 2026 mean
-  spreadScale: number;  // multiply the real 2026 stdDev
-  isReal: boolean;      // true only for 2026
+  isReal: boolean;
+  regions?: Region[];  // used for synthetic years
 }
 
 const EXPIRY_ROWS: ExpiryRow[] = [
-  { year: 2026, label: '2026', sublabel: 'Dec 31, 2026', meanShift: 1.00, spreadScale: 1.0,  isReal: true  },
-  { year: 2027, label: '2027', sublabel: 'Dec 31, 2027', meanShift: 1.35, spreadScale: 1.4,  isReal: false },
-  { year: 2028, label: '2028', sublabel: 'Dec 31, 2028', meanShift: 1.70, spreadScale: 1.8,  isReal: false },
-  { year: 2029, label: '2029', sublabel: 'Dec 31, 2029', meanShift: 2.10, spreadScale: 2.3,  isReal: false },
-  { year: 2030, label: '2030', sublabel: 'Dec 31, 2030', meanShift: 2.50, spreadScale: 2.7,  isReal: false },
+  { year: 2026, label: '2026', sublabel: 'Dec 31, 2026', isReal: true },
+  {
+    year: 2027, label: '2027', sublabel: 'Dec 31, 2027', isReal: false,
+    // Unimodal, slight right skew, peak ~90-95K
+    regions: [
+      { type: 'point', center: 92000, spread: 22000, weight: 1, skew: 0.3 },
+    ],
+  },
+  {
+    year: 2028, label: '2028', sublabel: 'Dec 31, 2028', isReal: false,
+    // Narrower, drifting right, clean unimodal ~110-120K
+    regions: [
+      { type: 'point', center: 115000, spread: 18000, weight: 1 },
+    ],
+  },
+  {
+    year: 2029, label: '2029', sublabel: 'Dec 31, 2029', isReal: false,
+    // Still narrowing, confident ~130-140K
+    regions: [
+      { type: 'point', center: 135000, spread: 15000, weight: 1 },
+    ],
+  },
+  {
+    year: 2030, label: '2030', sublabel: 'Dec 31, 2030', isReal: false,
+    // Wide uncertainty, fat tails both directions
+    regions: [
+      { type: 'point', center: 140000, spread: 38000, weight: 1 },
+      { type: 'point', center: 30000, spread: 12000, weight: 0.15 },  // bear tail spike
+      { type: 'point', center: 195000, spread: 8000, weight: 0.12 },  // bull tail spike
+    ],
+  },
 ];
 
 const HEATMAP_COLS = 300;  // horizontal resolution
@@ -233,19 +259,19 @@ export function TermStructureHeatmap({ marketId }: TermStructureHeatmapProps) {
     if (!market || !consensus) return [];
 
     const stats = computeStatistics(market.consensus, lb, ub);
-    const realMean = stats.mean;
-    const realStdDev = stats.stdDev;
 
     return EXPIRY_ROWS.map((expiry) => {
       let densityCurve: { x: number; y: number }[];
+      let mean: number;
 
       if (expiry.isReal) {
         densityCurve = consensus.points;
+        mean = stats.mean;
       } else {
-        const synMean = realMean * expiry.meanShift;
-        const synSpread = realStdDev * expiry.spreadScale;
-        const belief = generateGaussian(synMean, synSpread, numBuckets, lb, ub);
+        const belief = generateBelief(expiry.regions!, numBuckets, lb, ub);
         densityCurve = evaluateDensityCurve(belief, lb, ub, 300);
+        const synStats = computeStatistics(belief, lb, ub);
+        mean = synStats.mean;
       }
 
       const densities: number[] = [];
@@ -261,7 +287,6 @@ export function TermStructureHeatmap({ marketId }: TermStructureHeatmapProps) {
       }
 
       const maxDensity = Math.max(...densities);
-      const mean = expiry.isReal ? stats.mean : realMean * expiry.meanShift;
 
       return {
         year: expiry.year,
