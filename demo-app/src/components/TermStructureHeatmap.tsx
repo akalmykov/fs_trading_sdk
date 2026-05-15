@@ -236,6 +236,7 @@ export function TermStructureHeatmap({ marketId }: TermStructureHeatmapProps) {
   const ctx = React.useContext(FunctionSpaceContext as unknown as React.Context<FSContext | null>);
   const [selectedRow, setSelectedRow] = useState<number | null>(null);
   const [hoverRow, setHoverRow] = useState<number | null>(null);
+  const [savedBeliefs, setSavedBeliefs] = useState<Record<number, { mean: number; p10: number; p90: number }>>({});
 
   const lb = market?.config?.lowerBound ?? 0;
   const ub = market?.config?.upperBound ?? 200000;
@@ -249,6 +250,13 @@ export function TermStructureHeatmap({ marketId }: TermStructureHeatmapProps) {
     const pctiles = computePercentiles(belief, lb, ub);
     return { mean: stats.mean, p10: pctiles.p12_5, p90: pctiles.p87_5 };
   }, [ctx?.previewBelief, market, lb, ub]);
+
+  // Save belief to the selected row whenever it changes
+  useEffect(() => {
+    if (userBelief && selectedRow !== null) {
+      setSavedBeliefs(prev => ({ ...prev, [selectedRow]: userBelief }));
+    }
+  }, [userBelief, selectedRow]);
 
   /* ── Build row data from real consensus + synthetic ── */
   const rows = useMemo<RowData[]>(() => {
@@ -355,9 +363,9 @@ export function TermStructureHeatmap({ marketId }: TermStructureHeatmapProps) {
               </div>
             </div>
 
-            {/* User belief bracket — below selected row, above detail panel */}
-            {i === selectedRow && userBelief && (
-              <BeliefBracket lb={lb} ub={ub} userBelief={userBelief} />
+            {/* User belief bracket — show saved belief for this row, or live belief if selected */}
+            {(i === selectedRow ? userBelief : savedBeliefs[i]) && (
+              <BeliefBracket lb={lb} ub={ub} userBelief={(i === selectedRow ? userBelief : savedBeliefs[i])!} />
             )}
 
             {/* Inline detail panel — expands between rows */}

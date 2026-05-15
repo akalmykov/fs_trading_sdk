@@ -131,6 +131,7 @@ export function SolTermHeatmap({ marketId }: SolTermHeatmapProps) {
   const ctx = React.useContext(FunctionSpaceContext as unknown as React.Context<FSContext | null>);
   const [selectedCol, setSelectedCol] = useState<number | null>(null);
   const [hoverCol, setHoverCol] = useState<number | null>(null);
+  const [savedBeliefs, setSavedBeliefs] = useState<Record<number, { mean: number; p10: number; p90: number }>>({});
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const lb = market?.config?.lowerBound ?? 0;
@@ -145,6 +146,13 @@ export function SolTermHeatmap({ marketId }: SolTermHeatmapProps) {
     const pctiles = computePercentiles(belief, lb, ub);
     return { mean: stats.mean, p10: pctiles.p12_5, p90: pctiles.p87_5 };
   }, [ctx?.previewBelief, market, lb, ub]);
+
+  // Save belief to the selected column whenever it changes
+  useEffect(() => {
+    if (userBelief && selectedCol !== null) {
+      setSavedBeliefs(prev => ({ ...prev, [selectedCol]: userBelief }));
+    }
+  }, [userBelief, selectedCol]);
 
   /* ── Build column data ── */
   const cols = useMemo<ColData[]>(() => {
@@ -244,38 +252,40 @@ export function SolTermHeatmap({ marketId }: SolTermHeatmapProps) {
       }
     }
 
-    // User belief bracket (vertical bar on the selected column)
-    if (userBelief && selectedCol !== null) {
-      const colX = selectedCol * colW;
-      const p10Y = h - ((userBelief.p10 - lb) / (ub - lb)) * h;
-      const p90Y = h - ((userBelief.p90 - lb) / (ub - lb)) * h;
-      const meanY = h - ((userBelief.mean - lb) / (ub - lb)) * h;
+    // User belief brackets (vertical bars on columns with saved beliefs)
+    const allBeliefs: Record<number, { mean: number; p10: number; p90: number }> = { ...savedBeliefs };
+    if (userBelief && selectedCol !== null) allBeliefs[selectedCol] = userBelief;
+
+    for (const [colIdx, belief] of Object.entries(allBeliefs)) {
+      const c = Number(colIdx);
+      const colX = c * colW;
+      const p10Y = h - ((belief.p10 - lb) / (ub - lb)) * h;
+      const p90Y = h - ((belief.p90 - lb) / (ub - lb)) * h;
+      const meanY = h - ((belief.mean - lb) / (ub - lb)) * h;
       const bracketX = colX + colW - 12;
       const tickW = 6;
+      const isActive = c === selectedCol;
 
+      ctx2d.globalAlpha = isActive ? 1 : 0.6;
       ctx2d.strokeStyle = '#f59e0b';
       ctx2d.lineWidth = 1.5;
       ctx2d.setLineDash([]);
 
-      // Vertical connecting line
       ctx2d.beginPath();
       ctx2d.moveTo(bracketX, p90Y);
       ctx2d.lineTo(bracketX, p10Y);
       ctx2d.stroke();
 
-      // Top tick
       ctx2d.beginPath();
       ctx2d.moveTo(bracketX - tickW / 2, p90Y);
       ctx2d.lineTo(bracketX + tickW / 2, p90Y);
       ctx2d.stroke();
 
-      // Bottom tick
       ctx2d.beginPath();
       ctx2d.moveTo(bracketX - tickW / 2, p10Y);
       ctx2d.lineTo(bracketX + tickW / 2, p10Y);
       ctx2d.stroke();
 
-      // Mean dot
       ctx2d.beginPath();
       ctx2d.arc(bracketX, meanY, 4, 0, Math.PI * 2);
       ctx2d.fillStyle = '#f59e0b';
@@ -283,8 +293,9 @@ export function SolTermHeatmap({ marketId }: SolTermHeatmapProps) {
       ctx2d.strokeStyle = 'rgba(0,0,0,0.6)';
       ctx2d.lineWidth = 1.5;
       ctx2d.stroke();
+      ctx2d.globalAlpha = 1;
     }
-  }, [cols, selectedCol, hoverCol, lb, ub, userBelief]);
+  }, [cols, selectedCol, hoverCol, lb, ub, userBelief, savedBeliefs]);
 
   /* ── Price axis ticks ── */
   const yTicks = useMemo(() => {
