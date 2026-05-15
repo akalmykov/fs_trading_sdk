@@ -440,8 +440,10 @@ export function BrickDropBuilder({ marketId }: BrickDropBuilderProps) {
       ctx.save();
       ctx.globalAlpha = clamp(particle.life, 0, 1);
       ctx.fillStyle = particle.color;
+      ctx.shadowColor = particle.color;
+      ctx.shadowBlur = particle.size * particle.life * 3;
       ctx.beginPath();
-      ctx.arc(particle.x, particle.y, Math.max(0.3, particle.size * particle.life), 0, Math.PI * 2);
+      ctx.arc(particle.x, particle.y, Math.max(0.5, particle.size * particle.life), 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
     }
@@ -468,34 +470,38 @@ export function BrickDropBuilder({ marketId }: BrickDropBuilderProps) {
     const x = columnRect.left - areaRect.left + columnRect.width / 2;
     const y = stackRect.bottom - areaRect.top - row * 28 - 12;
     const ratio = columnPayouts[col]?.ratio ?? 0;
-    const color = payoutColor(ratio, 0.08);
-    const count = 12 + Math.floor(Math.random() * 7);
+    const color = payoutColor(ratio, 0.4);
+    const count = 20 + Math.floor(Math.random() * 12);
 
     const nextParticles: Particle[] = [];
     for (let i = 0; i < count; i += 1) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 1.5 + Math.random() * 4;
       nextParticles.push({
-        x,
+        x: x + (Math.random() - 0.5) * 8,
         y,
-        vx: -3 + Math.random() * 6,
-        vy: -4 + Math.random() * 3,
+        vx: Math.cos(angle) * speed,
+        vy: -2 - Math.random() * 4,
         life: 1,
-        decay: 0.04 + Math.random() * 0.03,
-        size: 1.5 + Math.random() * 2,
+        decay: 0.02 + Math.random() * 0.02,
+        size: 2 + Math.random() * 3,
         color,
       });
     }
 
     impactCountRef.current += 1;
-    if (impactCountRef.current % 4 === 0 || impactCountRef.current % 5 === 0) {
+    // Larger accent sparks
+    const accentCount = 2 + Math.floor(Math.random() * 3);
+    for (let i = 0; i < accentCount; i++) {
       nextParticles.push({
         x,
         y,
-        vx: -1.4 + Math.random() * 2.8,
-        vy: -2.8 - Math.random() * 1.4,
+        vx: -2.5 + Math.random() * 5,
+        vy: -4 - Math.random() * 3,
         life: 1,
-        decay: 0.02,
-        size: 5 + Math.random() * 2,
-        color: payoutColor(ratio, 0.15),
+        decay: 0.015,
+        size: 5 + Math.random() * 4,
+        color: payoutColor(ratio, 0.6),
         floorY: stackRect.bottom - areaRect.top + 2,
       });
     }
@@ -553,6 +559,11 @@ export function BrickDropBuilder({ marketId }: BrickDropBuilderProps) {
       const id = ++brickIdRef.current;
       setFallingBricks((prev) => [...prev, { col, id, row: currentRow }]);
 
+      // Spawn particles at visual impact moment (before overshoot bounce-back)
+      setTimeout(() => {
+        spawnImpactParticles(col, currentRow + 1);
+      }, 220);
+
       setTimeout(() => {
         setBrickCounts((prev) => {
           const total = prev.reduce((a, b) => a + b, 0);
@@ -563,7 +574,6 @@ export function BrickDropBuilder({ marketId }: BrickDropBuilderProps) {
         });
         pendingDropsRef.current = Math.max(0, pendingDropsRef.current - 1);
         setFallingBricks((prev) => prev.filter((b) => b.id !== id));
-        spawnImpactParticles(col, currentRow + 1);
         setLabelPulse({ col, tick: Date.now() });
       }, 350);
     },
