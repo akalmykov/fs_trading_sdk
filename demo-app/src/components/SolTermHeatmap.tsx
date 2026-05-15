@@ -12,7 +12,7 @@ import {
   generateBelief,
 } from '@functionspace/core';
 import type { Region } from '@functionspace/core';
-import { ConsensusChart, TradePanel, PositionTable } from '@functionspace/ui';
+import { ConsensusChart, ConsensusChartContent, TradePanel, PositionTable } from '@functionspace/ui';
 
 /* ── Thermal colormap (same as BTC heatmap) ── */
 const THERMAL_STOPS = [
@@ -99,110 +99,24 @@ interface ColData {
   densityCurve: { x: number; y: number }[];
 }
 
-/* ── Synthetic PDF Chart (static canvas rendering) ── */
-function SyntheticPdfChart({ curve, lb, ub, height }: { curve: { x: number; y: number }[]; lb: number; ub: number; height: number }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+/* ── Synthetic PDF Chart (re-uses ConsensusChartContent with synthetic data) ── */
+function SyntheticPdfChart({ curve, height, market }: { curve: { x: number; y: number }[]; lb: number; ub: number; height: number; market: any }) {
   const ctx = React.useContext(FunctionSpaceContext as unknown as React.Context<FSContext | null>);
-  const previewBelief = ctx?.previewBelief ?? null;
-
-  const previewCurve = useMemo(() => {
-    if (!previewBelief) return null;
-    return evaluateDensityCurve(previewBelief, lb, ub, 200);
-  }, [previewBelief, lb, ub]);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas || curve.length === 0) return;
-    const dpr = window.devicePixelRatio || 1;
-    const w = canvas.clientWidth;
-    canvas.width = w * dpr;
-    canvas.height = height * dpr;
-    canvas.style.height = `${height}px`;
-    const c = canvas.getContext('2d');
-    if (!c) return;
-    c.scale(dpr, dpr);
-
-    const pad = { top: 20, bottom: 30, left: 10, right: 10 };
-    const plotW = w - pad.left - pad.right;
-    const plotH = height - pad.top - pad.bottom;
-
-    let maxY = Math.max(...curve.map(p => p.y));
-    if (previewCurve) maxY = Math.max(maxY, ...previewCurve.map(p => p.y));
-
-    c.fillStyle = '#0d1117';
-    c.fillRect(0, 0, w, height);
-
-    c.strokeStyle = 'rgba(88,101,128,0.2)';
-    c.lineWidth = 1;
-    for (let i = 0; i <= 4; i++) {
-      const y = pad.top + (plotH / 4) * i;
-      c.beginPath(); c.moveTo(pad.left, y); c.lineTo(w - pad.right, y); c.stroke();
-    }
-
-    c.beginPath();
-    c.moveTo(pad.left, pad.top + plotH);
-    for (const pt of curve) {
-      c.lineTo(pad.left + ((pt.x - lb) / (ub - lb)) * plotW, pad.top + plotH - (pt.y / maxY) * plotH);
-    }
-    c.lineTo(pad.left + plotW, pad.top + plotH);
-    c.closePath();
-    c.fillStyle = 'rgba(59, 130, 246, 0.2)';
-    c.fill();
-
-    c.beginPath();
-    for (let i = 0; i < curve.length; i++) {
-      const px = pad.left + ((curve[i].x - lb) / (ub - lb)) * plotW;
-      const py = pad.top + plotH - (curve[i].y / maxY) * plotH;
-      if (i === 0) c.moveTo(px, py); else c.lineTo(px, py);
-    }
-    c.strokeStyle = '#3b82f6';
-    c.lineWidth = 2;
-    c.stroke();
-
-    if (previewCurve) {
-      c.beginPath();
-      c.moveTo(pad.left, pad.top + plotH);
-      for (const pt of previewCurve) {
-        c.lineTo(pad.left + ((pt.x - lb) / (ub - lb)) * plotW, pad.top + plotH - (pt.y / maxY) * plotH);
-      }
-      c.lineTo(pad.left + plotW, pad.top + plotH);
-      c.closePath();
-      c.fillStyle = 'rgba(249, 115, 22, 0.12)';
-      c.fill();
-
-      c.beginPath();
-      for (let i = 0; i < previewCurve.length; i++) {
-        const px = pad.left + ((previewCurve[i].x - lb) / (ub - lb)) * plotW;
-        const py = pad.top + plotH - (previewCurve[i].y / maxY) * plotH;
-        if (i === 0) c.moveTo(px, py); else c.lineTo(px, py);
-      }
-      c.setLineDash([6, 4]);
-      c.strokeStyle = '#f97316';
-      c.lineWidth = 2;
-      c.stroke();
-      c.setLineDash([]);
-    }
-
-    c.fillStyle = '#64748b';
-    c.font = '11px Inter, sans-serif';
-    c.textAlign = 'center';
-    const step = ub <= 500 ? 50 : ub <= 2000 ? 200 : ub <= 5000 ? 500 : 1000;
-    for (let v = 0; v <= ub; v += step) {
-      const px = pad.left + ((v - lb) / (ub - lb)) * plotW;
-      c.fillText(`$${v}`, px, height - 8);
-    }
-
-    c.fillStyle = '#94a3b8';
-    c.font = '12px Inter, sans-serif';
-    c.textAlign = 'left';
-    c.fillText('Synthetic Consensus PDF', pad.left + 4, pad.top - 6);
-  }, [curve, lb, ub, height, previewCurve]);
-
+  const hasPreview = !!ctx?.previewBelief;
+  const syntheticConsensus = useMemo(() => ({ points: curve, config: market.config }), [curve, market.config]);
+  const subtitle = hasPreview ? 'Compare market consensus with your trade preview' : 'Current market probability density';
   return (
-    <canvas
-      ref={canvasRef}
-      style={{ width: '100%', height, display: 'block', borderRadius: 8, border: '1px solid #1e293b' }}
-    />
+    <div className="fs-chart-container">
+      <div className="fs-chart-header">
+        <div className="fs-chart-header-row">
+          <div>
+            <h3 className="fs-chart-title">{market.title || 'Consensus'}</h3>
+            <p className="fs-chart-subtitle">{subtitle}</p>
+          </div>
+        </div>
+      </div>
+      <ConsensusChartContent market={market} consensus={syntheticConsensus} height={height} />
+    </div>
   );
 }
 
@@ -474,7 +388,7 @@ export function SolTermHeatmap({ marketId }: SolTermHeatmapProps) {
                   {selectedColData.isReal ? (
                     <ConsensusChart marketId={marketId} height={300} zoomable />
                   ) : (
-                    <SyntheticPdfChart curve={selectedColData.densityCurve} lb={lb} ub={ub} height={300} />
+                    <SyntheticPdfChart curve={selectedColData.densityCurve} lb={lb} ub={ub} height={300} market={market} />
                   )}
                 </div>
                 <div style={{ flex: 3, minWidth: 0 }}>
