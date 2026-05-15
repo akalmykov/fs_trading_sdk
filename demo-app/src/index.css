@@ -819,54 +819,51 @@ body {
   margin-bottom: 0.35rem;
 }
 
-.heatmap-grid-wrap {
+/* ── Inline row: label + canvas side by side ── */
+.heatmap-inline-row {
   display: flex;
-  gap: 0;
-}
-
-.heatmap-row-labels {
-  flex-shrink: 0;
-  width: 90px;
-}
-
-.heatmap-row-label {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  padding: 0 0.75rem 0 0;
+  align-items: stretch;
   cursor: pointer;
   transition: background 0.15s ease;
   border-left: 3px solid transparent;
 }
 
-.heatmap-row-label strong {
+.heatmap-inline-row.hovered {
+  background: rgba(96,165,250,0.03);
+}
+
+.heatmap-inline-row.selected {
+  border-left-color: #60a5fa;
+  background: rgba(96,165,250,0.06);
+}
+
+.heatmap-row-label-inline {
+  flex-shrink: 0;
+  width: 90px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 0 0.75rem 0 0;
+}
+
+.heatmap-row-label-inline strong {
   font-size: 1.05rem;
   color: #f8fafc;
   line-height: 1.2;
 }
 
-.heatmap-row-label span {
+.heatmap-inline-row.selected .heatmap-row-label-inline strong {
+  color: #60a5fa;
+}
+
+.heatmap-row-label-inline span {
   font-size: 0.65rem;
   color: #64748b;
 }
 
-.heatmap-row-label.hovered {
-  background: rgba(96,165,250,0.05);
-}
-
-.heatmap-row-label.selected {
-  border-left-color: #60a5fa;
-  background: rgba(96,165,250,0.08);
-}
-
-.heatmap-row-label.selected strong {
-  color: #60a5fa;
-}
-
-.heatmap-canvas-wrap {
+.heatmap-row-canvas-wrap {
   flex: 1;
   min-width: 0;
-  border-radius: 4px;
   overflow: hidden;
 }
 
@@ -878,7 +875,7 @@ body {
 .heatmap-x-axis {
   position: relative;
   height: 24px;
-  margin-left: 90px;
+  margin-left: 93px;
   margin-top: 4px;
 }
 
@@ -892,34 +889,39 @@ body {
 
 .heatmap-x-label {
   text-align: center;
-  margin-left: 90px;
+  margin-left: 93px;
   font-size: 0.72rem;
   font-weight: 600;
   color: #64748b;
   padding-bottom: 0.5rem;
 }
 
-/* ── PDF Detail Panel ── */
-.heatmap-detail {
+/* ── Inline detail panel (expands between rows) ── */
+.heatmap-inline-detail {
   max-height: 0;
   overflow: hidden;
   transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1),
-              opacity 0.3s ease;
+              opacity 0.3s ease,
+              margin 0.3s ease;
   opacity: 0;
-  border-top: 1px solid transparent;
+  margin: 0;
+  border-left: 3px solid transparent;
 }
 
-.heatmap-detail.open {
+.heatmap-inline-detail.open {
   max-height: 600px;
   opacity: 1;
-  border-top-color: rgba(96,165,250,0.25);
+  margin: 0.25rem 0;
+  border-left-color: #60a5fa;
+  background: rgba(96,165,250,0.03);
+  border-radius: 0 6px 6px 0;
 }
 
 .heatmap-detail-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1rem 1.5rem 0.5rem;
+  padding: 0.75rem 1rem 0.4rem;
 }
 
 .heatmap-detail-header h3 {
@@ -961,7 +963,7 @@ body {
 }
 
 .heatmap-detail-body {
-  padding: 0 1.5rem 1.25rem;
+  padding: 0 1rem 1rem;
 }
 
 .heatmap-detail-real {
@@ -970,31 +972,4 @@ body {
   min-height: 340px;
 }
 
-/* Synthetic PDF chart */
-.heatmap-pdf-synth {
-  width: 100%;
-}
-
-.heatmap-pdf-canvas {
-  display: block;
-  border-radius: 6px;
-  background: #0a0e18;
-}
-
-.heatmap-pdf-note {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  margin-top: 0.6rem;
-  padding: 0.5rem 0.75rem;
-  border-radius: 6px;
-  background: rgba(96,165,250,0.06);
-  border: 1px solid rgba(96,165,250,0.15);
-  font-size: 0.72rem;
-  color: #94a3b8;
-}
-
-.heatmap-pdf-note span {
-  font-size: 0.85rem;
-}
 

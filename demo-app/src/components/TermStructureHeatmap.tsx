@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   useMarket,
   useConsensus,
@@ -85,6 +85,105 @@ interface RowData {
   densityCurve: { x: number; y: number }[];
 }
 
+/* ── Per-row canvas sub-component ── */
+function HeatmapRowCanvas({
+  row,
+  isSelected,
+  isHovered,
+  lb,
+  ub,
+}: {
+  row: RowData;
+  isSelected: boolean;
+  isHovered: boolean;
+  lb: number;
+  ub: number;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    const w = canvas.clientWidth;
+    if (w === 0) return;
+
+    canvas.width = w * dpr;
+    canvas.height = ROW_HEIGHT * dpr;
+    canvas.style.height = `${ROW_HEIGHT}px`;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.scale(dpr, dpr);
+
+    const cellW = w / HEATMAP_COLS;
+
+    // Paint thermal heatmap with Gaussian blur kernel
+    for (let col = 0; col < HEATMAP_COLS; col++) {
+      let blurred = 0;
+      let weightSum = 0;
+      const kernelSize = 5;
+      for (let k = -kernelSize; k <= kernelSize; k++) {
+        const idx = col + k;
+        if (idx < 0 || idx >= HEATMAP_COLS) continue;
+        const weight = Math.exp(-0.5 * (k / 2) * (k / 2));
+        blurred += row.densities[idx] * weight;
+        weightSum += weight;
+      }
+      blurred /= weightSum;
+
+      const t = row.maxDensity > 0 ? blurred / row.maxDensity : 0;
+      const [r, g, b] = thermalRGB(t);
+      ctx.fillStyle = `rgb(${r},${g},${b})`;
+      ctx.fillRect(col * cellW, 0, cellW + 0.5, ROW_HEIGHT);
+    }
+
+    // Hover / selected border
+    if (isSelected || isHovered) {
+      ctx.strokeStyle = isSelected ? '#60a5fa' : 'rgba(96,165,250,0.4)';
+      ctx.lineWidth = isSelected ? 2 : 1;
+      ctx.strokeRect(0, 0.5, w - 0.5, ROW_HEIGHT - 1);
+    }
+
+    // Consensus mean dot
+    const meanX = ((row.mean - lb) / (ub - lb)) * w;
+    const dotY = ROW_HEIGHT / 2;
+
+    // Outer glow
+    const grad = ctx.createRadialGradient(meanX, dotY, 0, meanX, dotY, 12);
+    grad.addColorStop(0, 'rgba(255,255,255,0.5)');
+    grad.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(meanX, dotY, 12, 0, Math.PI * 2);
+    ctx.fill();
+
+    // White dot with dark outline
+    ctx.beginPath();
+    ctx.arc(meanX, dotY, 5, 0, Math.PI * 2);
+    ctx.fillStyle = '#fff';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Inner dot
+    ctx.beginPath();
+    ctx.arc(meanX, dotY, 2, 0, Math.PI * 2);
+    ctx.fillStyle = '#ff4444';
+    ctx.fill();
+  }, [row, isSelected, isHovered, lb, ub]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      className="heatmap-canvas"
+      style={{ width: '100%', height: ROW_HEIGHT, display: 'block' }}
+    />
+  );
+}
+
 /* ── Component ── */
 export interface TermStructureHeatmapProps {
   marketId: string | number;
@@ -93,7 +192,6 @@ export interface TermStructureHeatmapProps {
 export function TermStructureHeatmap({ marketId }: TermStructureHeatmapProps) {
   const { market } = useMarket(marketId);
   const { consensus } = useConsensus(marketId, 300);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
   const [selectedRow, setSelectedRow] = useState<number | null>(null);
   const [hoverRow, setHoverRow] = useState<number | null>(null);
 
@@ -105,7 +203,6 @@ export function TermStructureHeatmap({ marketId }: TermStructureHeatmapProps) {
   const rows = useMemo<RowData[]>(() => {
     if (!market || !consensus) return [];
 
-    // Stats from real 2026 data
     const stats = computeStatistics(market.consensus, lb, ub);
     const realMean = stats.mean;
     const realStdDev = stats.stdDev;
@@ -114,21 +211,17 @@ export function TermStructureHeatmap({ marketId }: TermStructureHeatmapProps) {
       let densityCurve: { x: number; y: number }[];
 
       if (expiry.isReal) {
-        // Use real consensus data
         densityCurve = consensus.points;
       } else {
-        // Generate synthetic Gaussian
         const synMean = realMean * expiry.meanShift;
         const synSpread = realStdDev * expiry.spreadScale;
         const belief = generateGaussian(synMean, synSpread, numBuckets, lb, ub);
         densityCurve = evaluateDensityCurve(belief, lb, ub, 300);
       }
 
-      // Sample density at HEATMAP_COLS evenly spaced points
       const densities: number[] = [];
       for (let i = 0; i < HEATMAP_COLS; i++) {
         const price = lb + (ub - lb) * (i + 0.5) / HEATMAP_COLS;
-        // Find nearest density point
         let best = densityCurve[0];
         let bestDist = Math.abs(densityCurve[0].x - price);
         for (const pt of densityCurve) {
@@ -139,9 +232,7 @@ export function TermStructureHeatmap({ marketId }: TermStructureHeatmapProps) {
       }
 
       const maxDensity = Math.max(...densities);
-      const mean = expiry.isReal
-        ? stats.mean
-        : realMean * expiry.meanShift;
+      const mean = expiry.isReal ? stats.mean : realMean * expiry.meanShift;
 
       return {
         year: expiry.year,
@@ -156,114 +247,6 @@ export function TermStructureHeatmap({ marketId }: TermStructureHeatmapProps) {
     });
   }, [market, consensus, lb, ub, numBuckets]);
 
-  /* ── Render heatmap canvas ── */
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas || rows.length === 0) return;
-
-    const dpr = window.devicePixelRatio || 1;
-    const w = canvas.clientWidth;
-    const h = ROW_HEIGHT * rows.length;
-
-    canvas.width = w * dpr;
-    canvas.height = h * dpr;
-    canvas.style.height = `${h}px`;
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    ctx.scale(dpr, dpr);
-
-    const cellW = w / HEATMAP_COLS;
-
-    for (let rowIdx = 0; rowIdx < rows.length; rowIdx++) {
-      const row = rows[rowIdx];
-      const y = rowIdx * ROW_HEIGHT;
-
-      // Apply Gaussian blur by using a wider sampling kernel for smoothness
-      for (let col = 0; col < HEATMAP_COLS; col++) {
-        // Apply a small Gaussian blur kernel for smoother appearance
-        let blurred = 0;
-        let weightSum = 0;
-        const kernelSize = 5;
-        for (let k = -kernelSize; k <= kernelSize; k++) {
-          const idx = col + k;
-          if (idx < 0 || idx >= HEATMAP_COLS) continue;
-          const weight = Math.exp(-0.5 * (k / 2) * (k / 2));
-          blurred += row.densities[idx] * weight;
-          weightSum += weight;
-        }
-        blurred /= weightSum;
-
-        const t = row.maxDensity > 0 ? blurred / row.maxDensity : 0;
-        const [r, g, b] = thermalRGB(t);
-        ctx.fillStyle = `rgb(${r},${g},${b})`;
-        ctx.fillRect(col * cellW, y, cellW + 0.5, ROW_HEIGHT);
-      }
-
-      // Draw hover/selected highlight border
-      if (rowIdx === hoverRow || rowIdx === selectedRow) {
-        ctx.strokeStyle = rowIdx === selectedRow ? '#60a5fa' : 'rgba(96,165,250,0.4)';
-        ctx.lineWidth = rowIdx === selectedRow ? 2 : 1;
-        ctx.strokeRect(0, y + 0.5, w - 0.5, ROW_HEIGHT - 1);
-      }
-
-      // Draw consensus mean dot
-      const meanX = ((row.mean - lb) / (ub - lb)) * w;
-      const dotY = y + ROW_HEIGHT / 2;
-
-      // Outer glow
-      const grad = ctx.createRadialGradient(meanX, dotY, 0, meanX, dotY, 12);
-      grad.addColorStop(0, 'rgba(255,255,255,0.5)');
-      grad.addColorStop(1, 'rgba(255,255,255,0)');
-      ctx.fillStyle = grad;
-      ctx.beginPath();
-      ctx.arc(meanX, dotY, 12, 0, Math.PI * 2);
-      ctx.fill();
-
-      // White dot with dark outline
-      ctx.beginPath();
-      ctx.arc(meanX, dotY, 5, 0, Math.PI * 2);
-      ctx.fillStyle = '#fff';
-      ctx.fill();
-      ctx.strokeStyle = 'rgba(0,0,0,0.7)';
-      ctx.lineWidth = 2;
-      ctx.stroke();
-
-      // Inner dot
-      ctx.beginPath();
-      ctx.arc(meanX, dotY, 2, 0, Math.PI * 2);
-      ctx.fillStyle = '#ff4444';
-      ctx.fill();
-    }
-  }, [rows, hoverRow, selectedRow, lb, ub]);
-
-  /* ── Handle canvas mouse events ── */
-  const handleCanvasMouseMove = useCallback(
-    (e: React.MouseEvent<HTMLCanvasElement>) => {
-      const rect = e.currentTarget.getBoundingClientRect();
-      const y = e.clientY - rect.top;
-      const rowIdx = Math.floor(y / ROW_HEIGHT);
-      if (rowIdx >= 0 && rowIdx < rows.length) {
-        setHoverRow(rowIdx);
-      } else {
-        setHoverRow(null);
-      }
-    },
-    [rows.length],
-  );
-
-  const handleCanvasClick = useCallback(
-    (e: React.MouseEvent<HTMLCanvasElement>) => {
-      const rect = e.currentTarget.getBoundingClientRect();
-      const y = e.clientY - rect.top;
-      const rowIdx = Math.floor(y / ROW_HEIGHT);
-      if (rowIdx >= 0 && rowIdx < rows.length) {
-        setSelectedRow((prev) => (prev === rowIdx ? null : rowIdx));
-      }
-    },
-    [rows.length],
-  );
-
   /* ── Price axis ticks ── */
   const xTicks = useMemo(() => {
     const ticks: { label: string; pct: number }[] = [];
@@ -273,23 +256,6 @@ export function TermStructureHeatmap({ marketId }: TermStructureHeatmapProps) {
     }
     return ticks;
   }, [lb, ub]);
-
-  /* ── selected row data for PDF detail ── */
-  const selectedData = selectedRow !== null && rows[selectedRow] ? rows[selectedRow] : null;
-
-  /* ── Compute stats for PDF detail ── */
-  const selectedStats = useMemo(() => {
-    if (!selectedData) return null;
-    const pts = selectedData.densityCurve;
-    if (pts.length === 0) return null;
-    // Mean
-    let sumXY = 0, sumY = 0;
-    for (const p of pts) { sumXY += p.x * p.y; sumY += p.y; }
-    const mean = sumY > 0 ? sumXY / sumY : 0;
-    // Peak density
-    const maxY = Math.max(...pts.map(p => p.y));
-    return { mean, maxDensity: maxY };
-  }, [selectedData]);
 
   if (!market || !consensus) {
     return (
@@ -312,37 +278,64 @@ export function TermStructureHeatmap({ marketId }: TermStructureHeatmapProps) {
 
       {/* ── Heatmap body ── */}
       <div className="heatmap-body">
-        {/* Y-axis label */}
         <div className="heatmap-y-label">Expiry</div>
 
-        <div className="heatmap-grid-wrap">
-          {/* Row labels (year + sublabel) */}
-          <div className="heatmap-row-labels">
-            {rows.map((row, i) => (
-              <div
-                key={row.year}
-                className={`heatmap-row-label ${i === selectedRow ? 'selected' : ''} ${i === hoverRow ? 'hovered' : ''}`}
-                style={{ height: ROW_HEIGHT }}
-                onClick={() => setSelectedRow(prev => prev === i ? null : i)}
-              >
+        {/* Per-row rendering with inline detail panels */}
+        {rows.map((row, i) => (
+          <React.Fragment key={row.year}>
+            {/* Row: label + canvas side by side */}
+            <div
+              className={`heatmap-inline-row ${i === selectedRow ? 'selected' : ''} ${i === hoverRow ? 'hovered' : ''}`}
+              onMouseEnter={() => setHoverRow(i)}
+              onMouseLeave={() => setHoverRow(null)}
+              onClick={() => setSelectedRow(prev => prev === i ? null : i)}
+            >
+              <div className="heatmap-row-label-inline">
                 <strong>{row.label}</strong>
                 <span>{row.sublabel}</span>
               </div>
-            ))}
-          </div>
+              <div className="heatmap-row-canvas-wrap">
+                <HeatmapRowCanvas
+                  row={row}
+                  isSelected={i === selectedRow}
+                  isHovered={i === hoverRow}
+                  lb={lb}
+                  ub={ub}
+                />
+              </div>
+            </div>
 
-          {/* Canvas */}
-          <div className="heatmap-canvas-wrap">
-            <canvas
-              ref={canvasRef}
-              className="heatmap-canvas"
-              style={{ width: '100%', cursor: 'pointer' }}
-              onMouseMove={handleCanvasMouseMove}
-              onMouseLeave={() => setHoverRow(null)}
-              onClick={handleCanvasClick}
-            />
-          </div>
-        </div>
+            {/* Inline detail panel — expands between rows */}
+            <div className={`heatmap-inline-detail ${i === selectedRow ? 'open' : ''}`}>
+              {i === selectedRow && (
+                <>
+                  <div className="heatmap-detail-header">
+                    <h3>
+                      {row.label} Distribution Detail
+                      <span className="heatmap-selected-badge">Selected Expiry</span>
+                    </h3>
+                    <button
+                      className="heatmap-collapse-btn"
+                      onClick={(e) => { e.stopPropagation(); setSelectedRow(null); }}
+                    >
+                      Collapse ▴
+                    </button>
+                  </div>
+                  <div className="heatmap-detail-body">
+                    <div className="heatmap-detail-real">
+                      <div style={{ flex: 7, minWidth: 0 }}>
+                        <ConsensusChart marketId={marketId} height={340} zoomable />
+                      </div>
+                      <div style={{ flex: 3, minWidth: 0 }}>
+                        <TradePanel marketId={marketId} modes={['gaussian', 'range']} />
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          </React.Fragment>
+        ))}
 
         {/* X-axis ticks */}
         <div className="heatmap-x-axis">
@@ -357,37 +350,6 @@ export function TermStructureHeatmap({ marketId }: TermStructureHeatmapProps) {
           ))}
         </div>
         <div className="heatmap-x-label">Price</div>
-      </div>
-
-      {/* ── PDF Detail Panel ── */}
-      <div className={`heatmap-detail ${selectedRow !== null ? 'open' : ''}`}>
-        {selectedData && (
-          <>
-            <div className="heatmap-detail-header">
-              <h3>
-                {selectedData.label} Distribution Detail
-                <span className="heatmap-selected-badge">Selected Expiry</span>
-              </h3>
-              <button
-                className="heatmap-collapse-btn"
-                onClick={() => setSelectedRow(null)}
-              >
-                Collapse ▴
-              </button>
-            </div>
-
-            <div className="heatmap-detail-body">
-              <div className="heatmap-detail-real">
-                <div style={{ flex: 7, minWidth: 0 }}>
-                  <ConsensusChart marketId={marketId} height={340} zoomable />
-                </div>
-                <div style={{ flex: 3, minWidth: 0 }}>
-                  <TradePanel marketId={marketId} modes={['gaussian', 'range']} />
-                </div>
-              </div>
-            </div>
-          </>
-        )}
       </div>
     </div>
   );
