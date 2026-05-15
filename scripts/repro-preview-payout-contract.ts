@@ -47,11 +47,20 @@ async function main() {
   const width = upperBound - lowerBound;
   const bucketWidth = width / numBuckets;
 
-  // Minimal hypothetical position: exactly one engine bucket in the middle of the outcome space.
-  const targetBucket = Math.floor(numBuckets / 2);
+  // Minimal hypothetical position: exactly one engine bucket at the lowest-consensus outcome.
+  console.log(`Market consensus lenght: ${market.consensus.length}`);
+  console.log(`Market consensus: ${market.consensus.map((c) => c.toFixed(4)).join(', ')}`);
+  const targetBucket = market.consensus
+    .reduce((lowestIndex, value, index, consensus) =>
+      value < consensus[lowestIndex] ? index : lowestIndex,
+    0);
+  const consensusSum = market.consensus.reduce((sum, c) => sum + c, 0);
+  console.log(`Consensus sum: ${consensusSum.toFixed(4)}`);
+  console.log(`Lowest consensus bucket index: ${targetBucket}, consensus: ${market.consensus[targetBucket].toFixed(4)}`);
+  const targetConsensus = market.consensus[targetBucket];
   const rangeLow = lowerBound + bucketWidth * targetBucket;
   const rangeHigh = rangeLow + bucketWidth;
-  console.log(`bucket width=${bucketWidth}, target bucket=${targetBucket}, testing range [${rangeLow}, ${rangeHigh}]`);
+  console.log(`bucket width=${bucketWidth}, lowest-consensus target bucket=${targetBucket}, consensus=${targetConsensus}, testing range [${rangeLow}, ${rangeHigh}]`);
   const rangeCenter = (rangeLow + rangeHigh) / 2;
   const belief = generateRange(rangeLow, rangeHigh, numBuckets, lowerBound, upperBound, 1);
   validateBeliefVector(belief, numBuckets);
@@ -59,11 +68,10 @@ async function main() {
   const started = Date.now();
   const curve = await previewPayoutCurve(client, MARKET_ID, belief, COLLATERAL, numBuckets, NUM_OUTCOMES);
   // serialize curve to json
-  const curveJson = JSON.stringify(curve);
-  await writeFile('diagnostics/preview-payout-curve.json', curveJson, 'utf8');
+  // const curveJson = JSON.stringify(curve);
+  // await writeFile('diagnostics/preview-payout-curve.json', curveJson, 'utf8');
   console.log(`Generated ${curve.previews.length} preview points`);
-  console.log(`target bucket preview: ${curve.previews[targetBucket] ? `outcome=${curve.previews[targetBucket].outcome} payout=${money(curve.previews[targetBucket].payout)}` : 'N/A'}`);
-  const durationMs = Date.now() - started;
+  console.log(`Target bucket preview: ${curve.previews[targetBucket] ? `outcome=${curve.previews[targetBucket].outcome} payout=${money(curve.previews[targetBucket].payout)}` : 'N/A'}`);
   const mappedOutcome = mapOutcome(curve.previews[targetBucket].outcome, lowerBound, upperBound);
   console.log(`Mapped target bucket payout to outcome space: ${mappedOutcome}`);
   const outcomeInsideRange = mappedOutcome >= rangeLow && mappedOutcome <= rangeHigh;
@@ -74,11 +82,27 @@ async function main() {
   for (let i = 0; i < curve.previews.length; i++) {
     const preview = curve.previews[i];
     if (curve.previews[targetBucket].payout < preview.payout) {
-      // console.warn(`Warning: payout for 100% concentrated target bucket is less than for bucket #${i}`);
       bucketsLargerCount++;
+      // console.log(`Bucket ${i} has larger payout than target bucket: ${money(preview.payout)} > ${money(curve.previews[targetBucket].payout)}, with consensus ${market.consensus[i].toFixed(4)} and outcome ${preview.outcome}`);
     }
   }
   console.log(`Total buckets with larger payout than target bucket: ${bucketsLargerCount} out of ${curve.previews.length}`);
+
+  const highestConsensusBucket = market.consensus
+    .reduce((highestIndex, value, index, consensus) =>
+      value > consensus[highestIndex] ? index : highestIndex,
+    0);
+  console.log(`Highest consensus bucket index: ${highestConsensusBucket}, consensus: ${market.consensus[highestConsensusBucket].toFixed(4)}`);
+  console.log(`Highest consensus bucket payout: $${curve.previews[highestConsensusBucket].payout}`);
+  console.log(`Highest consensus bucket profit/loss: $${curve.previews[highestConsensusBucket].profitLoss}`)
+
+  let postitiveProfitLossCount = 0;
+  for (let i = 0; i < curve.previews.length; i++) {
+    if (curve.previews[i].profitLoss > 0) {
+      postitiveProfitLossCount++;
+    }
+  }
+  console.log(`Total buckets with positive profit/loss: ${postitiveProfitLossCount} out of ${curve.previews.length}`);
 }
 
 main().catch((error) => {

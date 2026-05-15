@@ -256,7 +256,7 @@ export function ConePriceChart({
       chart.timeScale().setVisibleRange({ from: visFrom as any, to: buf as any });
     });
 
-    return () => { chart.removeSeries(ext); hiddenExtRef.current = null; };
+    return () => { if (chartApiRef.current) chart.removeSeries(ext); hiddenExtRef.current = null; };
   }, [candles, settlementDate, lb, ub]);
 
   /* ── draw cone overlay ── */
@@ -295,9 +295,11 @@ export function ConePriceChart({
     coneLowerRef.current = lowerSeries;
 
     return () => {
-      chart.removeSeries(centerSeries);
-      chart.removeSeries(upperSeries);
-      chart.removeSeries(lowerSeries);
+      if (chartApiRef.current) {
+        chart.removeSeries(centerSeries);
+        chart.removeSeries(upperSeries);
+        chart.removeSeries(lowerSeries);
+      }
       coneCenterRef.current = null;
       coneUpperRef.current = null;
       coneLowerRef.current = null;
@@ -325,7 +327,7 @@ export function ConePriceChart({
     const handler = () => updateSettlementX();
     chart.timeScale().subscribeVisibleTimeRangeChange(handler);
     requestAnimationFrame(handler);
-    return () => chart.timeScale().unsubscribeVisibleTimeRangeChange(handler);
+    return () => { if (chartApiRef.current) chart.timeScale().unsubscribeVisibleTimeRangeChange(handler); };
   }, [updateSettlementX, candles]);
 
   /* ── consensus PDF overlay (canvas) ── */

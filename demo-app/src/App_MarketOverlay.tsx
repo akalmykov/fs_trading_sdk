@@ -13,7 +13,11 @@ import { BasicTradingLayout as TradingLayout } from './App_BasicTradingLayout';
 
 export default function App_MarketOverlay() {
   return (
-    <FunctionSpaceProvider config={config} theme={widgetTheme}>
+    <FunctionSpaceProvider
+      config={config}
+      theme={widgetTheme}
+      cache={{ revalidateOnFocus: false, staleTime: 30_000 }}
+    >
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '2rem' }}>
         <h1 style={{ color: 'var(--fs-text)', marginBottom: '1.5rem', fontFamily: 'inherit' }}>
           Market Explorer

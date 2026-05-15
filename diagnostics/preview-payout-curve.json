@@ -1,0 +1,407 @@
+{
+    "previews": [
+        {
+            "outcome": 0,
+            "payout": 1281.79,
+            "profitLoss": 1181.79
+        },
+        {
+            "outcome": 0.0127,
+            "payout": 1294.55,
+            "profitLoss": 1194.55
+        },
+        {
+            "outcome": 0.0253,
+            "payout": 1308.01,
+            "profitLoss": 1208.01
+        },
+        {
+            "outcome": 0.038,
+            "payout": 1322.29,
+            "profitLoss": 1222.29
+        },
+        {
+            "outcome": 0.0506,
+            "payout": 1337.46,
+            "profitLoss": 1237.46
+        },
+        {
+            "outcome": 0.0633,
+            "payout": 1353.61,
+            "profitLoss": 1253.61
+        },
+        {
+            "outcome": 0.0759,
+            "payout": 1370.78,
+            "profitLoss": 1270.78
+        },
+        {
+            "outcome": 0.0886,
+            "payout": 1389.03,
+            "profitLoss": 1289.03
+        },
+        {
+            "outcome": 0.1013,
+            "payout": 1408.41,
+            "profitLoss": 1308.41
+        },
+        {
+            "outcome": 0.1139,
+            "payout": 1428.98,
+            "profitLoss": 1328.98
+        },
+        {
+            "outcome": 0.1266,
+            "payout": 1450.81,
+            "profitLoss": 1350.81
+        },
+        {
+            "outcome": 0.1392,
+            "payout": 1473.94,
+            "profitLoss": 1373.94
+        },
+        {
+            "outcome": 0.1519,
+            "payout": 1498.44,
+            "profitLoss": 1398.44
+        },
+        {
+            "outcome": 0.1646,
+            "payout": 1524.37,
+            "profitLoss": 1424.37
+        },
+        {
+            "outcome": 0.1772,
+            "payout": 1551.77,
+            "profitLoss": 1451.77
+        },
+        {
+            "outcome": 0.1899,
+            "payout": 1580.69,
+            "profitLoss": 1480.69
+        },
+        {
+            "outcome": 0.2025,
+            "payout": 1611.18,
+            "profitLoss": 1511.18
+        },
+        {
+            "outcome": 0.2152,
+            "payout": 1643.27,
+            "profitLoss": 1543.27
+        },
+        {
+            "outcome": 0.2278,
+            "payout": 1676.98,
+            "profitLoss": 1576.98
+        },
+        {
+            "outcome": 0.2405,
+            "payout": 1712.31,
+            "profitLoss": 1612.31
+        },
+        {
+            "outcome": 0.2532,
+            "payout": 1749.29,
+            "profitLoss": 1649.29
+        },
+        {
+            "outcome": 0.2658,
+            "payout": 1787.91,
+            "profitLoss": 1687.91
+        },
+        {
+            "outcome": 0.2785,
+            "payout": 1828.17,
+            "profitLoss": 1728.17
+        },
+        {
+            "outcome": 0.2911,
+            "payout": 1870.05,
+            "profitLoss": 1770.05
+        },
+        {
+            "outcome": 0.3038,
+            "payout": 1913.52,
+            "profitLoss": 1813.52
+        },
+        {
+            "outcome": 0.3165,
+            "payout": 1958.58,
+            "profitLoss": 1858.58
+        },
+        {
+            "outcome": 0.3291,
+            "payout": 2005.19,
+            "profitLoss": 1905.19
+        },
+        {
+            "outcome": 0.3418,
+            "payout": 2053.36,
+            "profitLoss": 1953.36
+        },
+        {
+            "outcome": 0.3544,
+            "payout": 2103.06,
+            "profitLoss": 2003.06
+        },
+        {
+            "outcome": 0.3671,
+            "payout": 2154.3,
+            "profitLoss": 2054.3
+        },
+        {
+            "outcome": 0.3797,
+            "payout": 2207.05,
+            "profitLoss": 2107.05
+        },
+        {
+            "outcome": 0.3924,
+            "payout": 2261.31,
+            "profitLoss": 2161.31
+        },
+        {
+            "outcome": 0.4051,
+            "payout": 2317.06,
+            "profitLoss": 2217.06
+        },
+        {
+            "outcome": 0.4177,
+            "payout": 2374.29,
+            "profitLoss": 2274.29
+        },
+        {
+            "outcome": 0.4304,
+            "payout": 2433,
+            "profitLoss": 2333
+        },
+        {
+            "outcome": 0.443,
+            "payout": 2493.18,
+            "profitLoss": 2393.18
+        },
+        {
+            "outcome": 0.4557,
+            "payout": 2554.86,
+            "profitLoss": 2454.86
+        },
+        {
+            "outcome": 0.4684,
+            "payout": 2618.04,
+            "profitLoss": 2518.04
+        },
+        {
+            "outcome": 0.481,
+            "payout": 2682.77,
+            "profitLoss": 2582.77
+        },
+        {
+            "outcome": 0.4937,
+            "payout": 2749.07,
+            "profitLoss": 2649.07
+        },
+        {
+            "outcome": 0.5063,
+            "payout": 2816.98,
+            "profitLoss": 2716.98
+        },
+        {
+            "outcome": 0.519,
+            "payout": 2886.32,
+            "profitLoss": 2786.32
+        },
+        {
+            "outcome": 0.5316,
+            "payout": 2941.82,
+            "profitLoss": 2841.82
+        },
+        {
+            "outcome": 0.5443,
+            "payout": 2953.64,
+            "profitLoss": 2853.64
+        },
+        {
+            "outcome": 0.557,
+            "payout": 2952.07,
+            "profitLoss": 2852.07
+        },
+        {
+            "outcome": 0.5696,
+            "payout": 2950.42,
+            "profitLoss": 2850.42
+        },
+        {
+            "outcome": 0.5823,
+            "payout": 2948.84,
+            "profitLoss": 2848.84
+        },
+        {
+            "outcome": 0.5949,
+            "payout": 2947.34,
+            "profitLoss": 2847.34
+        },
+        {
+            "outcome": 0.6076,
+            "payout": 2945.96,
+            "profitLoss": 2845.96
+        },
+        {
+            "outcome": 0.6203,
+            "payout": 2944.72,
+            "profitLoss": 2844.72
+        },
+        {
+            "outcome": 0.6329,
+            "payout": 2943.65,
+            "profitLoss": 2843.65
+        },
+        {
+            "outcome": 0.6456,
+            "payout": 2942.79,
+            "profitLoss": 2842.79
+        },
+        {
+            "outcome": 0.6582,
+            "payout": 2942.19,
+            "profitLoss": 2842.19
+        },
+        {
+            "outcome": 0.6709,
+            "payout": 2941.88,
+            "profitLoss": 2841.88
+        },
+        {
+            "outcome": 0.6835,
+            "payout": 2941.92,
+            "profitLoss": 2841.92
+        },
+        {
+            "outcome": 0.6962,
+            "payout": 2942.37,
+            "profitLoss": 2842.37
+        },
+        {
+            "outcome": 0.7089,
+            "payout": 2943.3,
+            "profitLoss": 2843.3
+        },
+        {
+            "outcome": 0.7215,
+            "payout": 2944.77,
+            "profitLoss": 2844.77
+        },
+        {
+            "outcome": 0.7342,
+            "payout": 2946.87,
+            "profitLoss": 2846.87
+        },
+        {
+            "outcome": 0.7468,
+            "payout": 2949.67,
+            "profitLoss": 2849.67
+        },
+        {
+            "outcome": 0.7595,
+            "payout": 2953.29,
+            "profitLoss": 2853.29
+        },
+        {
+            "outcome": 0.7722,
+            "payout": 2957.81,
+            "profitLoss": 2857.81
+        },
+        {
+            "outcome": 0.7848,
+            "payout": 2963.34,
+            "profitLoss": 2863.34
+        },
+        {
+            "outcome": 0.7975,
+            "payout": 2970.02,
+            "profitLoss": 2870.02
+        },
+        {
+            "outcome": 0.8101,
+            "payout": 2977.95,
+            "profitLoss": 2877.95
+        },
+        {
+            "outcome": 0.8228,
+            "payout": 2987.28,
+            "profitLoss": 2887.28
+        },
+        {
+            "outcome": 0.8354,
+            "payout": 2998.16,
+            "profitLoss": 2898.16
+        },
+        {
+            "outcome": 0.8481,
+            "payout": 3010.73,
+            "profitLoss": 2910.73
+        },
+        {
+            "outcome": 0.8608,
+            "payout": 3025.17,
+            "profitLoss": 2925.17
+        },
+        {
+            "outcome": 0.8734,
+            "payout": 3041.64,
+            "profitLoss": 2941.64
+        },
+        {
+            "outcome": 0.8861,
+            "payout": 3060.34,
+            "profitLoss": 2960.34
+        },
+        {
+            "outcome": 0.8987,
+            "payout": 3081.46,
+            "profitLoss": 2981.46
+        },
+        {
+            "outcome": 0.9114,
+            "payout": 3105.21,
+            "profitLoss": 3005.21
+        },
+        {
+            "outcome": 0.9241,
+            "payout": 3131.82,
+            "profitLoss": 3031.82
+        },
+        {
+            "outcome": 0.9367,
+            "payout": 3161.54,
+            "profitLoss": 3061.54
+        },
+        {
+            "outcome": 0.9494,
+            "payout": 3194.62,
+            "profitLoss": 3094.62
+        },
+        {
+            "outcome": 0.962,
+            "payout": 3231.39,
+            "profitLoss": 3131.39
+        },
+        {
+            "outcome": 0.9747,
+            "payout": 3272.16,
+            "profitLoss": 3172.16
+        },
+        {
+            "outcome": 0.9873,
+            "payout": 3317.34,
+            "profitLoss": 3217.34
+        },
+        {
+            "outcome": 1,
+            "payout": 3367.36,
+            "profitLoss": 3267.36
+        }
+    ],
+    "maxPayout": 3367.36,
+    "maxPayoutOutcome": 1,
+    "inputCollateral": 100
+}
