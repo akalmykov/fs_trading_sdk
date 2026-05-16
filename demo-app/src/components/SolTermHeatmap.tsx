@@ -14,6 +14,37 @@ import {
 import type { Region } from '@functionspace/core';
 import { ConsensusChart, ConsensusChartContent, TradePanel, PositionTable } from '@functionspace/ui';
 
+/* ── BeliefInterceptor: patches context to capture TradePanel's belief writes ── */
+function BeliefInterceptor({ colIdx, lb, ub, onBeliefChange, children }: {
+  colIdx: number; lb: number; ub: number;
+  onBeliefChange: (colIdx: number, belief: { mean: number; p10: number; p90: number }) => void;
+  children: React.ReactNode;
+}) {
+  const parentCtx = React.useContext(FunctionSpaceContext as unknown as React.Context<FSContext | null>);
+  const patchedCtx = useMemo(() => {
+    if (!parentCtx) return null;
+    return {
+      ...parentCtx,
+      setPreviewBelief: (belief: number[] | null) => {
+        parentCtx.setPreviewBelief(belief);
+        if (belief) {
+          const stats = computeStatistics(belief, lb, ub);
+          const pctiles = computePercentiles(belief, lb, ub);
+          onBeliefChange(colIdx, { mean: stats.mean, p10: pctiles.p12_5, p90: pctiles.p87_5 });
+        }
+      },
+    };
+  }, [parentCtx, colIdx, lb, ub, onBeliefChange]);
+
+  if (!patchedCtx) return null;
+  return (
+    // @ts-expect-error React types version mismatch between demo-app and packages
+    <FunctionSpaceContext.Provider value={patchedCtx as any}>
+      {children}
+    </FunctionSpaceContext.Provider>
+  );
+}
+
 /* ── Thermal colormap (same as BTC heatmap) ── */
 const THERMAL_STOPS = [
   { t: 0.00, r:  10, g:  12, b:  28 },
@@ -132,31 +163,27 @@ export function SolTermHeatmap({ marketId }: SolTermHeatmapProps) {
   const [selectedCol, setSelectedCol] = useState<number | null>(null);
   const [hoverCol, setHoverCol] = useState<number | null>(null);
   const [savedBeliefs, setSavedBeliefs] = useState<Record<number, { mean: number; p10: number; p90: number }>>({});
-  const [prediction, setPrediction] = useState<number | undefined>(undefined);
-  const [confidence, setConfidence] = useState<number | undefined>(undefined);
+  const [perColState, setPerColState] = useState<Record<number, { prediction?: number; confidence?: number }>>({});
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const dragRef = useRef<{ mode: 'move' | 'top' | 'bottom'; startY: number; startMean: number; startP10: number; startP90: number } | null>(null);
   const didDragRef = useRef(false);
+
+  // Per-column prediction/confidence (no cross-contamination)
+  const prediction = selectedCol !== null ? perColState[selectedCol]?.prediction : undefined;
+  const confidence = selectedCol !== null ? perColState[selectedCol]?.confidence : undefined;
+  const setPrediction = useCallback((val: number) => {
+    if (selectedCol !== null) setPerColState(prev => ({ ...prev, [selectedCol]: { ...prev[selectedCol], prediction: val } }));
+  }, [selectedCol]);
+  const setConfidence = useCallback((val: number) => {
+    if (selectedCol !== null) setPerColState(prev => ({ ...prev, [selectedCol]: { ...prev[selectedCol], confidence: val } }));
+  }, [selectedCol]);
 
   const lb = market?.config?.lowerBound ?? 0;
   const ub = market?.config?.upperBound ?? 3000;
   const numBuckets = market?.config?.numBuckets ?? 80;
 
-  /* ── User belief bracket ── */
-  const userBelief = useMemo(() => {
-    const belief = ctx?.previewBelief;
-    if (!belief || !market) return null;
-    const stats = computeStatistics(belief, lb, ub);
-    const pctiles = computePercentiles(belief, lb, ub);
-    return { mean: stats.mean, p10: pctiles.p12_5, p90: pctiles.p87_5 };
-  }, [ctx?.previewBelief, market, lb, ub]);
-
-  // Save belief to the selected column whenever it changes
-  useEffect(() => {
-    if (userBelief && selectedCol !== null) {
-      setSavedBeliefs(prev => ({ ...prev, [selectedCol]: userBelief }));
-    }
-  }, [userBelief, selectedCol]);
+  // userBelief for display: from savedBeliefs only (never from shared previewBelief)
+  const userBelief = useMemo(() => selectedCol !== null ? (savedBeliefs[selectedCol] ?? null) : null, [savedBeliefs, selectedCol]);
 
   // Convert halfWidth to confidence
   const halfWidthToConfidence = useCallback((hw: number) => {
@@ -166,6 +193,11 @@ export function SolTermHeatmap({ marketId }: SolTermHeatmapProps) {
     const sigma = hw / 1.15;
     return Math.max(0, Math.min(100, ((maxSigma - sigma) / (maxSigma - minSigma)) * 100));
   }, [lb, ub]);
+
+  // Callback for BeliefInterceptor
+  const handleBeliefFromPanel = useCallback((colIdx: number, belief: { mean: number; p10: number; p90: number }) => {
+    setSavedBeliefs(prev => ({ ...prev, [colIdx]: belief }));
+  }, []);
 
   /* ── Build column data ── */
   const cols = useMemo<ColData[]>(() => {
@@ -203,6 +235,16 @@ export function SolTermHeatmap({ marketId }: SolTermHeatmapProps) {
       return { year: col.year, label: col.label, isReal: col.isReal, densities, maxDensity: Math.max(...densities), mean, densityCurve };
     });
   }, [market, consensus, lb, ub, numBuckets]);
+
+  // Create default bracket when a column is first selected
+  useEffect(() => {
+    if (selectedCol !== null && !savedBeliefs[selectedCol] && cols.length > selectedCol) {
+      const col = cols[selectedCol];
+      const range = ub - lb;
+      const hw = range * 0.12;
+      setSavedBeliefs(prev => ({ ...prev, [selectedCol]: { mean: col.mean, p10: col.mean - hw, p90: col.mean + hw } }));
+    }
+  }, [selectedCol, cols, lb, ub]);
 
   // Canvas pointer handlers for bracket dragging
   const handleCanvasPointerDown = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -247,25 +289,30 @@ export function SolTermHeatmap({ marketId }: SolTermHeatmapProps) {
 
     const onMove = (ev: PointerEvent) => {
       if (!dragRef.current) return;
-      const dy = ev.clientY - dragRef.current.startY;
+      if (!dragRef.current) return;
+      const { startY, startMean, startP10, startP90, mode: dragMode } = dragRef.current;
+      const dy = ev.clientY - startY;
       const pricePerPx = (ub - lb) / h;
       const dp = -dy * pricePerPx;
 
-      if (dragRef.current.mode === 'move') {
-        const newMean = Math.max(lb, Math.min(ub, dragRef.current.startMean + dp));
-        const hw = (dragRef.current.startP90 - dragRef.current.startP10) / 2;
+      if (dragMode === 'move') {
+        const newMean = Math.max(lb, Math.min(ub, startMean + dp));
+        const hw = (startP90 - startP10) / 2;
         setPrediction(+newMean.toFixed(2));
         setConfidence(Math.round(halfWidthToConfidence(hw)));
-      } else if (dragRef.current.mode === 'top') {
-        const newP90 = Math.min(ub, Math.max(dragRef.current.startP10 + (ub - lb) * 0.02, dragRef.current.startP90 + dp));
-        const hw = (newP90 - dragRef.current.startP10) / 2;
-        setPrediction(+(dragRef.current.startP10 + hw).toFixed(2));
+        setSavedBeliefs(prev => ({ ...prev, [targetCol!]: { mean: +newMean.toFixed(2), p10: +newMean.toFixed(2) - hw, p90: +newMean.toFixed(2) + hw } }));
+      } else if (dragMode === 'top') {
+        const newP90 = Math.min(ub, Math.max(startP10 + (ub - lb) * 0.02, startP90 + dp));
+        const hw = (newP90 - startP10) / 2;
+        setPrediction(+(startP10 + hw).toFixed(2));
         setConfidence(Math.round(halfWidthToConfidence(hw)));
+        setSavedBeliefs(prev => ({ ...prev, [targetCol!]: { mean: +(startP10 + hw).toFixed(2), p10: startP10, p90: startP10 + hw * 2 } }));
       } else {
-        const newP10 = Math.max(lb, Math.min(dragRef.current.startP90 - (ub - lb) * 0.02, dragRef.current.startP10 + dp));
-        const hw = (dragRef.current.startP90 - newP10) / 2;
+        const newP10 = Math.max(lb, Math.min(startP90 - (ub - lb) * 0.02, startP10 + dp));
+        const hw = (startP90 - newP10) / 2;
         setPrediction(+(newP10 + hw).toFixed(2));
         setConfidence(Math.round(halfWidthToConfidence(hw)));
+        setSavedBeliefs(prev => ({ ...prev, [targetCol!]: { mean: +(newP10 + hw).toFixed(2), p10: newP10, p90: startP90 } }));
       }
     };
     const onUp = () => {
@@ -472,7 +519,7 @@ export function SolTermHeatmap({ marketId }: SolTermHeatmapProps) {
       {/* Detail panel */}
       <div className={`heatmap-inline-detail ${selectedCol !== null ? 'open' : ''}`}>
         {selectedCol !== null && selectedColData && (
-          <>
+          <BeliefInterceptor colIdx={selectedCol} lb={lb} ub={ub} onBeliefChange={handleBeliefFromPanel}>
             <div className="heatmap-detail-header">
               <h3>
                 {selectedColData.label} Distribution Detail
@@ -492,11 +539,11 @@ export function SolTermHeatmap({ marketId }: SolTermHeatmapProps) {
                   )}
                 </div>
                 <div style={{ flex: 3, minWidth: 0 }}>
-                  <TradePanel marketId={marketId} modes={['gaussian', 'range']} prediction={prediction} confidence={confidence} onPredictionChange={setPrediction} onConfidenceChange={setConfidence} />
+                  <TradePanel marketId={marketId} modes={['gaussian', 'range']} prediction={prediction} confidence={confidence} />
                 </div>
               </div>
             </div>
-          </>
+          </BeliefInterceptor>
         )}
       </div>
     </div>

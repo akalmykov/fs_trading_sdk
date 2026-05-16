@@ -8,8 +8,41 @@ import type { FSContext } from '@functionspace/react';
 import {
   computeStatistics,
   computePercentiles,
+  generateGaussian,
+  buy,
 } from '@functionspace/core';
 import { ConsensusChart, TradePanel, MarketStats, PositionTable, PasswordlessAuthWidget } from '@functionspace/ui';
+
+/* ── BeliefInterceptor: patches context to capture TradePanel's belief writes ── */
+function BeliefInterceptor({ colIdx, lb, ub, onBeliefChange, children }: {
+  colIdx: number; lb: number; ub: number;
+  onBeliefChange: (colIdx: number, belief: { mean: number; p10: number; p90: number }) => void;
+  children: React.ReactNode;
+}) {
+  const parentCtx = React.useContext(FunctionSpaceContext as unknown as React.Context<FSContext | null>);
+  const patchedCtx = useMemo(() => {
+    if (!parentCtx) return null;
+    return {
+      ...parentCtx,
+      setPreviewBelief: (belief: number[] | null) => {
+        parentCtx.setPreviewBelief(belief);
+        if (belief) {
+          const stats = computeStatistics(belief, lb, ub);
+          const pctiles = computePercentiles(belief, lb, ub);
+          onBeliefChange(colIdx, { mean: stats.mean, p10: pctiles.p12_5, p90: pctiles.p87_5 });
+        }
+      },
+    };
+  }, [parentCtx, colIdx, lb, ub, onBeliefChange]);
+
+  if (!patchedCtx) return null;
+  return (
+    // @ts-expect-error React types version mismatch between demo-app and packages
+    <FunctionSpaceContext.Provider value={patchedCtx as any}>
+      {children}
+    </FunctionSpaceContext.Provider>
+  );
+}
 
 /* ── Thermal colormap ── */
 const THERMAL_STOPS = [
@@ -79,11 +112,20 @@ export function SpMultiTermHeatmap() {
   const [selectedCol, setSelectedCol] = useState<number | null>(null);
   const [hoverCol, setHoverCol] = useState<number | null>(null);
   const [savedBeliefs, setSavedBeliefs] = useState<Record<number, { mean: number; p10: number; p90: number }>>({});
-  const [prediction, setPrediction] = useState<number | undefined>(undefined);
-  const [confidence, setConfidence] = useState<number | undefined>(undefined);
+  const [perColState, setPerColState] = useState<Record<number, { prediction?: number; confidence?: number }>>({});
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const dragRef = useRef<{ mode: 'move' | 'top' | 'bottom'; startY: number; startMean: number; startP10: number; startP90: number } | null>(null);
   const didDragRef = useRef(false);
+
+  // Per-column prediction/confidence (no cross-contamination)
+  const prediction = selectedCol !== null ? perColState[selectedCol]?.prediction : undefined;
+  const confidence = selectedCol !== null ? perColState[selectedCol]?.confidence : undefined;
+  const setPrediction = useCallback((val: number) => {
+    if (selectedCol !== null) setPerColState(prev => ({ ...prev, [selectedCol]: { ...prev[selectedCol], prediction: val } }));
+  }, [selectedCol]);
+  const setConfidence = useCallback((val: number) => {
+    if (selectedCol !== null) setPerColState(prev => ({ ...prev, [selectedCol]: { ...prev[selectedCol], confidence: val } }));
+  }, [selectedCol]);
 
   const allLoaded = markets.every(m => m.market) && consensuses.every(c => c.consensus);
 
@@ -91,20 +133,8 @@ export function SpMultiTermHeatmap() {
   const lb = markets[0]?.market?.config?.lowerBound ?? 3700;
   const ub = markets[0]?.market?.config?.upperBound ?? 11100;
 
-  // User belief
-  const userBelief = useMemo(() => {
-    const belief = ctx?.previewBelief;
-    if (!belief || selectedCol === null) return null;
-    const stats = computeStatistics(belief, lb, ub);
-    const pctiles = computePercentiles(belief, lb, ub);
-    return { mean: stats.mean, p10: pctiles.p12_5, p90: pctiles.p87_5 };
-  }, [ctx?.previewBelief, selectedCol, lb, ub]);
-
-  useEffect(() => {
-    if (userBelief && selectedCol !== null) {
-      setSavedBeliefs(prev => ({ ...prev, [selectedCol]: userBelief }));
-    }
-  }, [userBelief, selectedCol]);
+  // userBelief for display: from savedBeliefs only (never from shared previewBelief)
+  const userBelief = useMemo(() => selectedCol !== null ? (savedBeliefs[selectedCol] ?? null) : null, [savedBeliefs, selectedCol]);
 
   const halfWidthToConfidence = useCallback((hw: number) => {
     const range = ub - lb;
@@ -113,6 +143,38 @@ export function SpMultiTermHeatmap() {
     const sigma = hw / 1.15;
     return Math.max(0, Math.min(100, Math.round(((maxSigma - sigma) / (maxSigma - minSigma)) * 100)));
   }, [lb, ub]);
+
+  // Batch submit all saved beliefs
+  const [submitting, setSubmitting] = useState(false);
+  const handleSubmitAll = useCallback(async () => {
+    if (!ctx || !allLoaded || Object.keys(savedBeliefs).length === 0) return;
+    setSubmitting(true);
+    try {
+      for (const [colIdx, belief] of Object.entries(savedBeliefs)) {
+        const i = Number(colIdx);
+        const market = markets[i].market!;
+        const numBuckets = market.config.numBuckets;
+        const sigma = (belief.p90 - belief.p10) / 2.3;
+        const beliefVector = generateGaussian(belief.mean, sigma, numBuckets, lb, ub);
+        await buy(ctx.client, MARKETS[i].id, beliefVector, 10, numBuckets);
+      }
+      ctx.invalidateAll();
+    } catch (e) {
+      console.error('Batch submit failed:', e);
+    }
+    setSubmitting(false);
+  }, [ctx, allLoaded, savedBeliefs, markets, lb, ub]);
+
+  // Remove a belief from a specific column
+  const removeBelief = useCallback((colIdx: number) => {
+    setSavedBeliefs(prev => { const next = { ...prev }; delete next[colIdx]; return next; });
+    if (selectedCol === colIdx) setSelectedCol(null);
+  }, [selectedCol]);
+
+  // Callback for BeliefInterceptor
+  const handleBeliefFromPanel = useCallback((colIdx: number, belief: { mean: number; p10: number; p90: number }) => {
+    setSavedBeliefs(prev => ({ ...prev, [colIdx]: belief }));
+  }, []);
 
   // Build column data
   const cols = useMemo<ColData[]>(() => {
@@ -141,6 +203,16 @@ export function SpMultiTermHeatmap() {
       };
     });
   }, [allLoaded]);
+
+  // Create default bracket when a column is first selected
+  useEffect(() => {
+    if (selectedCol !== null && !savedBeliefs[selectedCol] && cols.length > selectedCol) {
+      const col = cols[selectedCol];
+      const range = ub - lb;
+      const hw = range * 0.12;
+      setSavedBeliefs(prev => ({ ...prev, [selectedCol]: { mean: col.mean, p10: col.mean - hw, p90: col.mean + hw } }));
+    }
+  }, [selectedCol, cols, lb, ub]);
 
   // Canvas drag handler
   const handleCanvasPointerDown = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -185,25 +257,30 @@ export function SpMultiTermHeatmap() {
 
     const onMove = (ev: PointerEvent) => {
       if (!dragRef.current) return;
-      const dy = ev.clientY - dragRef.current.startY;
+      if (!dragRef.current) return;
+      const { startY, startMean, startP10, startP90, mode: dragMode } = dragRef.current;
+      const dy = ev.clientY - startY;
       const pricePerPx = (ub - lb) / h;
       const dp = -dy * pricePerPx;
 
-      if (dragRef.current.mode === 'move') {
-        const newMean = Math.max(lb, Math.min(ub, dragRef.current.startMean + dp));
-        const hw = (dragRef.current.startP90 - dragRef.current.startP10) / 2;
+      if (dragMode === 'move') {
+        const newMean = Math.max(lb, Math.min(ub, startMean + dp));
+        const hw = (startP90 - startP10) / 2;
         setPrediction(+newMean.toFixed(2));
         setConfidence(Math.round(halfWidthToConfidence(hw)));
-      } else if (dragRef.current.mode === 'top') {
-        const newP90 = Math.min(ub, Math.max(dragRef.current.startP10 + (ub - lb) * 0.02, dragRef.current.startP90 + dp));
-        const hw = (newP90 - dragRef.current.startP10) / 2;
-        setPrediction(+(dragRef.current.startP10 + hw).toFixed(2));
+        setSavedBeliefs(prev => ({ ...prev, [targetCol!]: { mean: +newMean.toFixed(2), p10: +newMean.toFixed(2) - hw, p90: +newMean.toFixed(2) + hw } }));
+      } else if (dragMode === 'top') {
+        const newP90 = Math.min(ub, Math.max(startP10 + (ub - lb) * 0.02, startP90 + dp));
+        const hw = (newP90 - startP10) / 2;
+        setPrediction(+(startP10 + hw).toFixed(2));
         setConfidence(Math.round(halfWidthToConfidence(hw)));
+        setSavedBeliefs(prev => ({ ...prev, [targetCol!]: { mean: +(startP10 + hw).toFixed(2), p10: startP10, p90: startP10 + hw * 2 } }));
       } else {
-        const newP10 = Math.max(lb, Math.min(dragRef.current.startP90 - (ub - lb) * 0.02, dragRef.current.startP10 + dp));
-        const hw = (dragRef.current.startP90 - newP10) / 2;
+        const newP10 = Math.max(lb, Math.min(startP90 - (ub - lb) * 0.02, startP10 + dp));
+        const hw = (startP90 - newP10) / 2;
         setPrediction(+(newP10 + hw).toFixed(2));
         setConfidence(Math.round(halfWidthToConfidence(hw)));
+        setSavedBeliefs(prev => ({ ...prev, [targetCol!]: { mean: +(newP10 + hw).toFixed(2), p10: newP10, p90: startP90 } }));
       }
     };
     const onUp = () => { dragRef.current = null; setTimeout(() => { didDragRef.current = false; }, 50); window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp); };
@@ -351,6 +428,11 @@ export function SpMultiTermHeatmap() {
           <h2 className="heatmap-title">S&P 500 Multi-Month Term Structure</h2>
           <p className="heatmap-subtitle">Real consensus data — June through November 2026. Click a column to trade.</p>
         </div>
+        {Object.keys(savedBeliefs).length > 0 && (
+          <button className="heatmap-submit-all-btn" onClick={handleSubmitAll} disabled={submitting}>
+            {submitting ? 'Submitting…' : `Submit All (${Object.keys(savedBeliefs).length})`}
+          </button>
+        )}
       </div>
 
       <div className="sol-heatmap-body">
@@ -371,6 +453,16 @@ export function SpMultiTermHeatmap() {
             onMouseLeave={() => setHoverCol(null)}
             onPointerDown={handleCanvasPointerDown}
           />
+          {/* Remove buttons per column */}
+          {cols.map((col, i) => savedBeliefs[i] && (
+            <button
+              key={col.marketId}
+              className="heatmap-row-remove-btn"
+              style={{ position: 'absolute', top: 4, left: `${(i / cols.length) * 100}%`, zIndex: 5 }}
+              onClick={(e) => { e.stopPropagation(); removeBelief(i); }}
+              aria-label="Remove belief"
+            >×</button>
+          ))}
           <div className="sol-heatmap-x-axis">
             {cols.map((col, i) => (
               <span key={col.marketId} className="sol-heatmap-x-tick" style={{ left: `${(i + 0.5) / cols.length * 100}%` }}>
@@ -384,7 +476,7 @@ export function SpMultiTermHeatmap() {
       {/* Detail panel */}
       <div className={`heatmap-inline-detail ${selectedCol !== null ? 'open' : ''}`}>
         {selectedCol !== null && selectedColData && (
-          <>
+          <BeliefInterceptor colIdx={selectedCol} lb={lb} ub={ub} onBeliefChange={handleBeliefFromPanel}>
             <div className="heatmap-detail-header">
               <h3>
                 {selectedColData.sublabel} — S&P 500
@@ -398,11 +490,11 @@ export function SpMultiTermHeatmap() {
                   <ConsensusChart marketId={selectedColData.marketId} height={300} zoomable />
                 </div>
                 <div style={{ flex: 3, minWidth: 0 }}>
-                  <TradePanel marketId={selectedColData.marketId} modes={['gaussian', 'range']} prediction={prediction} confidence={confidence} onPredictionChange={setPrediction} onConfidenceChange={setConfidence} />
+                  <TradePanel marketId={selectedColData.marketId} modes={['gaussian', 'range']} prediction={prediction} confidence={confidence} />
                 </div>
               </div>
             </div>
-          </>
+          </BeliefInterceptor>
         )}
       </div>
     </div>

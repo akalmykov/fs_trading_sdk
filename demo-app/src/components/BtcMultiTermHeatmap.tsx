@@ -9,8 +9,43 @@ import {
   computeStatistics,
   computePercentiles,
   evaluateDensityCurve,
+  generateGaussian,
+  buy,
 } from '@functionspace/core';
 import { ConsensusChart, TradePanel, PositionTable, PasswordlessAuthWidget, MarketStats } from '@functionspace/ui';
+
+/* ── BeliefInterceptor: patches context to capture TradePanel's belief writes ── */
+const beliefInterceptorSkipRef = { current: false };
+
+function BeliefInterceptor({ rowIdx, lb, ub, onBeliefChange, children }: {
+  rowIdx: number; lb: number; ub: number;
+  onBeliefChange: (rowIdx: number, belief: { mean: number; p10: number; p90: number }) => void;
+  children: React.ReactNode;
+}) {
+  const parentCtx = React.useContext(FunctionSpaceContext as unknown as React.Context<FSContext | null>);
+  const patchedCtx = useMemo(() => {
+    if (!parentCtx) return null;
+    return {
+      ...parentCtx,
+      setPreviewBelief: (belief: number[] | null) => {
+        parentCtx.setPreviewBelief(belief);
+        if (belief) {
+          const stats = computeStatistics(belief, lb, ub);
+          const pctiles = computePercentiles(belief, lb, ub);
+          onBeliefChange(rowIdx, { mean: stats.mean, p10: pctiles.p12_5, p90: pctiles.p87_5 });
+        }
+      },
+    };
+  }, [parentCtx, rowIdx, lb, ub, onBeliefChange]);
+
+  if (!patchedCtx) return null;
+  return (
+    // @ts-expect-error React types version mismatch between demo-app and packages
+    <FunctionSpaceContext.Provider value={patchedCtx as any}>
+      {children}
+    </FunctionSpaceContext.Provider>
+  );
+}
 
 /* ── Thermal colormap ── */
 const THERMAL_STOPS = [
@@ -204,8 +239,17 @@ export function BtcMultiTermHeatmap() {
   const [selectedRow, setSelectedRow] = useState<number | null>(null);
   const [hoverRow, setHoverRow] = useState<number | null>(null);
   const [savedBeliefs, setSavedBeliefs] = useState<Record<number, { mean: number; p10: number; p90: number }>>({});
-  const [prediction, setPrediction] = useState<number | undefined>(undefined);
-  const [confidence, setConfidence] = useState<number | undefined>(undefined);
+  const [perRowState, setPerRowState] = useState<Record<number, { prediction?: number; confidence?: number }>>({});
+
+  // Per-row prediction/confidence (no cross-contamination)
+  const prediction = selectedRow !== null ? perRowState[selectedRow]?.prediction : undefined;
+  const confidence = selectedRow !== null ? perRowState[selectedRow]?.confidence : undefined;
+  const setPrediction = useCallback((val: number) => {
+    if (selectedRow !== null) setPerRowState(prev => ({ ...prev, [selectedRow]: { ...prev[selectedRow], prediction: val } }));
+  }, [selectedRow]);
+  const setConfidence = useCallback((val: number) => {
+    if (selectedRow !== null) setPerRowState(prev => ({ ...prev, [selectedRow]: { ...prev[selectedRow], confidence: val } }));
+  }, [selectedRow]);
 
   const allLoaded = markets.every(m => m.market) && consensuses.every(c => c.consensus);
 
@@ -259,21 +303,18 @@ export function BtcMultiTermHeatmap() {
   const selectedMarketLb = selectedRow !== null && rows[selectedRow] ? rows[selectedRow].lb : 0;
   const selectedMarketUb = selectedRow !== null && rows[selectedRow] ? rows[selectedRow].ub : 712000;
 
-  const userBelief = useMemo(() => {
-    const belief = ctx?.previewBelief;
-    if (!belief || selectedRow === null || !rows[selectedRow]) return null;
-    const { lb, ub } = rows[selectedRow];
-    const stats = computeStatistics(belief, lb, ub);
-    const pctiles = computePercentiles(belief, lb, ub);
-    return { mean: stats.mean, p10: pctiles.p12_5, p90: pctiles.p87_5 };
-  }, [ctx?.previewBelief, selectedRow, rows]);
+  // userBelief for display: from savedBeliefs only (never from shared previewBelief)
+  const userBelief = useMemo(() => selectedRow !== null ? (savedBeliefs[selectedRow] ?? null) : null, [savedBeliefs, selectedRow]);
 
-  // Save belief when it changes
+  // Create default bracket when a row is first selected
   useEffect(() => {
-    if (userBelief && selectedRow !== null) {
-      setSavedBeliefs(prev => ({ ...prev, [selectedRow]: userBelief }));
+    if (selectedRow !== null && !savedBeliefs[selectedRow] && rows[selectedRow]) {
+      const row = rows[selectedRow];
+      const range = row.ub - row.lb;
+      const hw = range * 0.12;
+      setSavedBeliefs(prev => ({ ...prev, [selectedRow]: { mean: row.mean, p10: row.mean - hw, p90: row.mean + hw } }));
     }
-  }, [userBelief, selectedRow]);
+  }, [selectedRow, rows]);
 
   // Drag handler
   const halfWidthToConfidence = useCallback((hw: number, lb: number, ub: number) => {
@@ -290,7 +331,41 @@ export function BtcMultiTermHeatmap() {
     if (!row) return;
     setPrediction(+mean.toFixed(2));
     setConfidence(halfWidthToConfidence(halfWidth, row.lb, row.ub));
+    setSavedBeliefs(prev => ({ ...prev, [rowIdx]: { mean: +mean.toFixed(2), p10: +mean.toFixed(2) - halfWidth, p90: +mean.toFixed(2) + halfWidth } }));
   }, [selectedRow, rows, halfWidthToConfidence]);
+
+  // Callback for BeliefInterceptor
+  const handleBeliefFromPanel = useCallback((rowIdx: number, belief: { mean: number; p10: number; p90: number }) => {
+    setSavedBeliefs(prev => ({ ...prev, [rowIdx]: belief }));
+  }, []);
+
+  // Batch submit all saved beliefs
+  const [submitting, setSubmitting] = useState(false);
+  const handleSubmitAll = useCallback(async () => {
+    if (!ctx || !allLoaded || Object.keys(savedBeliefs).length === 0) return;
+    setSubmitting(true);
+    try {
+      for (const [rowIdx, belief] of Object.entries(savedBeliefs)) {
+        const row = rows[Number(rowIdx)];
+        if (!row) continue;
+        const market = markets[Number(rowIdx)].market!;
+        const numBuckets = market.config.numBuckets;
+        const sigma = (belief.p90 - belief.p10) / 2.3; // ≈ ±1.15σ
+        const beliefVector = generateGaussian(belief.mean, sigma, numBuckets, row.lb, row.ub);
+        await buy(ctx.client, row.marketId, beliefVector, 10, numBuckets);
+      }
+      ctx.invalidateAll();
+    } catch (e) {
+      console.error('Batch submit failed:', e);
+    }
+    setSubmitting(false);
+  }, [ctx, allLoaded, savedBeliefs, rows, markets]);
+
+  // Remove a belief from a specific row
+  const removeBelief = useCallback((rowIdx: number) => {
+    setSavedBeliefs(prev => { const next = { ...prev }; delete next[rowIdx]; return next; });
+    if (selectedRow === rowIdx) setSelectedRow(null);
+  }, [selectedRow]);
 
   // Price axis ticks
   const xTicks = useMemo(() => {
@@ -330,6 +405,11 @@ export function BtcMultiTermHeatmap() {
           <h2 className="heatmap-title">Bitcoin Multi-Term Year-End Closing Price</h2>
           <p className="heatmap-subtitle">Real consensus data from 5 markets (2026–2030). Click a row to trade.</p>
         </div>
+        {Object.keys(savedBeliefs).length > 0 && (
+          <button className="heatmap-submit-all-btn" onClick={handleSubmitAll} disabled={submitting}>
+            {submitting ? 'Submitting…' : `Submit All (${Object.keys(savedBeliefs).length})`}
+          </button>
+        )}
       </div>
 
       <div className="heatmap-body">
@@ -349,6 +429,9 @@ export function BtcMultiTermHeatmap() {
               </div>
               <div className="heatmap-row-canvas-wrap">
                 <HeatmapRowCanvas row={row} isSelected={i === selectedRow} isHovered={i === hoverRow} globalLb={globalLb} globalUb={globalUb} />
+                {savedBeliefs[i] && (
+                  <button className="heatmap-row-remove-btn" onClick={(e) => { e.stopPropagation(); removeBelief(i); }} aria-label="Remove belief">×</button>
+                )}
               </div>
             </div>
 
@@ -365,7 +448,7 @@ export function BtcMultiTermHeatmap() {
             {/* Detail panel */}
             <div className={`heatmap-inline-detail ${i === selectedRow ? 'open' : ''}`}>
               {i === selectedRow && (
-                <>
+                <BeliefInterceptor rowIdx={i} lb={row.lb} ub={row.ub} onBeliefChange={handleBeliefFromPanel}>
                   <div className="heatmap-detail-header">
                     <h3>
                       {row.label} — {markets[i].market!.title}
@@ -381,11 +464,11 @@ export function BtcMultiTermHeatmap() {
                         <ConsensusChart marketId={row.marketId} height={340} zoomable />
                       </div>
                       <div style={{ flex: 3, minWidth: 0 }}>
-                        <TradePanel marketId={row.marketId} modes={['gaussian', 'range']} prediction={prediction} confidence={confidence} onPredictionChange={setPrediction} onConfidenceChange={setConfidence} />
+                        <TradePanel marketId={row.marketId} modes={['gaussian', 'range']} prediction={prediction} confidence={confidence} />
                       </div>
                     </div>
                   </div>
-                </>
+                </BeliefInterceptor>
               )}
             </div>
           </React.Fragment>
