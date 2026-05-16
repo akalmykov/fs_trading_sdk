@@ -311,7 +311,7 @@ export function TermStructureHeatmap({ marketId }: TermStructureHeatmapProps) {
   const [selectedRow, setSelectedRow] = useState<number | null>(null);
   const [hoverRow, setHoverRow] = useState<number | null>(null);
   const [savedBeliefs, setSavedBeliefs] = useState<Record<number, { mean: number; p10: number; p90: number }>>({});
-  const [perRowState, setPerRowState] = useState<Record<number, { prediction?: number; confidence?: number }>>({});
+  const [perRowState, setPerRowState] = useState<Record<number, { prediction?: number; confidence?: number; amount?: string }>>({});
 
   // Per-row prediction/confidence (no cross-contamination)
   const prediction = selectedRow !== null ? perRowState[selectedRow]?.prediction : undefined;
@@ -321,6 +321,10 @@ export function TermStructureHeatmap({ marketId }: TermStructureHeatmapProps) {
   }, [selectedRow]);
   const setConfidence = useCallback((val: number) => {
     if (selectedRow !== null) setPerRowState(prev => ({ ...prev, [selectedRow]: { ...prev[selectedRow], confidence: val } }));
+  }, [selectedRow]);
+  const amount = selectedRow !== null ? perRowState[selectedRow]?.amount : undefined;
+  const setAmount = useCallback((val: string) => {
+    if (selectedRow !== null) setPerRowState(prev => ({ ...prev, [selectedRow]: { ...prev[selectedRow], amount: val } }));
   }, [selectedRow]);
 
   const lb = market?.config?.lowerBound ?? 0;
@@ -399,14 +403,7 @@ export function TermStructureHeatmap({ marketId }: TermStructureHeatmapProps) {
     });
   }, [market, consensus, lb, ub, numBuckets]);
 
-  // Create default bracket when a row is first selected
-  useEffect(() => {
-    if (selectedRow !== null && !savedBeliefs[selectedRow] && rows[selectedRow]) {
-      const row = rows[selectedRow];
-      const hw = (ub - lb) * 0.12;
-      setSavedBeliefs(prev => ({ ...prev, [selectedRow]: { mean: row.mean, p10: row.mean - hw, p90: row.mean + hw } }));
-    }
-  }, [selectedRow, rows, lb, ub]);
+  // Bracket is created by BeliefInterceptor on first TradePanel render
 
   /* ── Price axis ticks ── */
   const xTicks = useMemo(() => {
@@ -497,7 +494,7 @@ export function TermStructureHeatmap({ marketId }: TermStructureHeatmapProps) {
                         )}
                       </div>
                       <div style={{ flex: 3, minWidth: 0 }}>
-                        <TradePanel marketId={marketId} modes={['gaussian', 'range']} prediction={prediction} confidence={confidence} />
+                        <TradePanel marketId={marketId} modes={['gaussian', 'range']} prediction={prediction} confidence={confidence} amount={amount} onAmountChange={setAmount} />
                       </div>
                     </div>
                   </div>

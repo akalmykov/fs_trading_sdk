@@ -12,7 +12,8 @@ import {
   generateGaussian,
   buy,
 } from '@functionspace/core';
-import { ConsensusChart, TradePanel, PositionTable, PasswordlessAuthWidget, MarketStats } from '@functionspace/ui';
+import { ConsensusChart, TradePanel, PasswordlessAuthWidget, MarketStats } from '@functionspace/ui';
+import { MultiMarketPositionTable } from './MultiMarketPositionTable';
 
 /* ── BeliefInterceptor: patches context to capture TradePanel's belief writes ── */
 const beliefInterceptorSkipRef = { current: false };
@@ -239,7 +240,7 @@ export function BtcMultiTermHeatmap() {
   const [selectedRow, setSelectedRow] = useState<number | null>(null);
   const [hoverRow, setHoverRow] = useState<number | null>(null);
   const [savedBeliefs, setSavedBeliefs] = useState<Record<number, { mean: number; p10: number; p90: number }>>({});
-  const [perRowState, setPerRowState] = useState<Record<number, { prediction?: number; confidence?: number }>>({});
+  const [perRowState, setPerRowState] = useState<Record<number, { prediction?: number; confidence?: number; amount?: string }>>({});
 
   // Per-row prediction/confidence (no cross-contamination)
   const prediction = selectedRow !== null ? perRowState[selectedRow]?.prediction : undefined;
@@ -249,6 +250,10 @@ export function BtcMultiTermHeatmap() {
   }, [selectedRow]);
   const setConfidence = useCallback((val: number) => {
     if (selectedRow !== null) setPerRowState(prev => ({ ...prev, [selectedRow]: { ...prev[selectedRow], confidence: val } }));
+  }, [selectedRow]);
+  const amount = selectedRow !== null ? perRowState[selectedRow]?.amount : undefined;
+  const setAmount = useCallback((val: string) => {
+    if (selectedRow !== null) setPerRowState(prev => ({ ...prev, [selectedRow]: { ...prev[selectedRow], amount: val } }));
   }, [selectedRow]);
 
   const allLoaded = markets.every(m => m.market) && consensuses.every(c => c.consensus);
@@ -306,15 +311,7 @@ export function BtcMultiTermHeatmap() {
   // userBelief for display: from savedBeliefs only (never from shared previewBelief)
   const userBelief = useMemo(() => selectedRow !== null ? (savedBeliefs[selectedRow] ?? null) : null, [savedBeliefs, selectedRow]);
 
-  // Create default bracket when a row is first selected
-  useEffect(() => {
-    if (selectedRow !== null && !savedBeliefs[selectedRow] && rows[selectedRow]) {
-      const row = rows[selectedRow];
-      const range = row.ub - row.lb;
-      const hw = range * 0.12;
-      setSavedBeliefs(prev => ({ ...prev, [selectedRow]: { mean: row.mean, p10: row.mean - hw, p90: row.mean + hw } }));
-    }
-  }, [selectedRow, rows]);
+  // Bracket is created by BeliefInterceptor on first TradePanel render
 
   // Drag handler
   const halfWidthToConfidence = useCallback((hw: number, lb: number, ub: number) => {
@@ -352,14 +349,15 @@ export function BtcMultiTermHeatmap() {
         const numBuckets = market.config.numBuckets;
         const sigma = (belief.p90 - belief.p10) / 2.3; // ≈ ±1.15σ
         const beliefVector = generateGaussian(belief.mean, sigma, numBuckets, row.lb, row.ub);
-        await buy(ctx.client, row.marketId, beliefVector, 10, numBuckets);
+        await buy(ctx.client, row.marketId, beliefVector, parseFloat(perRowState[Number(rowIdx)]?.amount ?? '100') || 100, numBuckets);
       }
       ctx.invalidateAll();
     } catch (e) {
       console.error('Batch submit failed:', e);
+      alert('Batch submit failed: ' + (e instanceof Error ? e.message : String(e)));
     }
     setSubmitting(false);
-  }, [ctx, allLoaded, savedBeliefs, rows, markets]);
+  }, [ctx, allLoaded, savedBeliefs, perRowState, rows, markets]);
 
   // Remove a belief from a specific row
   const removeBelief = useCallback((rowIdx: number) => {
@@ -464,7 +462,7 @@ export function BtcMultiTermHeatmap() {
                         <ConsensusChart marketId={row.marketId} height={340} zoomable />
                       </div>
                       <div style={{ flex: 3, minWidth: 0 }}>
-                        <TradePanel marketId={row.marketId} modes={['gaussian', 'range']} prediction={prediction} confidence={confidence} />
+                        <TradePanel marketId={row.marketId} modes={['gaussian', 'range']} prediction={prediction} confidence={confidence} amount={amount} onAmountChange={setAmount} />
                       </div>
                     </div>
                   </div>
@@ -486,7 +484,7 @@ export function BtcMultiTermHeatmap() {
       </div>
     </div>
       <div style={{ marginTop: '1rem' }}>
-        <PositionTable marketId={activeMarketId} tabs={['open-orders', 'trade-history', 'market-positions']} />
+        <MultiMarketPositionTable markets={MARKETS.map(m => ({ id: m.id, label: m.label }))} />
       </div>
     </div>
   );

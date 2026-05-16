@@ -11,7 +11,8 @@ import {
   generateGaussian,
   buy,
 } from '@functionspace/core';
-import { ConsensusChart, TradePanel, MarketStats, PositionTable, PasswordlessAuthWidget } from '@functionspace/ui';
+import { ConsensusChart, TradePanel, MarketStats, PasswordlessAuthWidget } from '@functionspace/ui';
+import { MultiMarketPositionTable } from './MultiMarketPositionTable';
 
 /* ── BeliefInterceptor: patches context to capture TradePanel's belief writes ── */
 function BeliefInterceptor({ colIdx, lb, ub, onBeliefChange, children }: {
@@ -112,7 +113,7 @@ export function SpMultiTermHeatmap() {
   const [selectedCol, setSelectedCol] = useState<number | null>(null);
   const [hoverCol, setHoverCol] = useState<number | null>(null);
   const [savedBeliefs, setSavedBeliefs] = useState<Record<number, { mean: number; p10: number; p90: number }>>({});
-  const [perColState, setPerColState] = useState<Record<number, { prediction?: number; confidence?: number }>>({});
+  const [perColState, setPerColState] = useState<Record<number, { prediction?: number; confidence?: number; amount?: string }>>({});
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const dragRef = useRef<{ mode: 'move' | 'top' | 'bottom'; startY: number; startMean: number; startP10: number; startP90: number } | null>(null);
   const didDragRef = useRef(false);
@@ -125,6 +126,10 @@ export function SpMultiTermHeatmap() {
   }, [selectedCol]);
   const setConfidence = useCallback((val: number) => {
     if (selectedCol !== null) setPerColState(prev => ({ ...prev, [selectedCol]: { ...prev[selectedCol], confidence: val } }));
+  }, [selectedCol]);
+  const amount = selectedCol !== null ? perColState[selectedCol]?.amount : undefined;
+  const setAmount = useCallback((val: string) => {
+    if (selectedCol !== null) setPerColState(prev => ({ ...prev, [selectedCol]: { ...prev[selectedCol], amount: val } }));
   }, [selectedCol]);
 
   const allLoaded = markets.every(m => m.market) && consensuses.every(c => c.consensus);
@@ -156,14 +161,16 @@ export function SpMultiTermHeatmap() {
         const numBuckets = market.config.numBuckets;
         const sigma = (belief.p90 - belief.p10) / 2.3;
         const beliefVector = generateGaussian(belief.mean, sigma, numBuckets, lb, ub);
-        await buy(ctx.client, MARKETS[i].id, beliefVector, 10, numBuckets);
+        const collateral = parseFloat(perColState[i]?.amount ?? '100') || 100;
+        await buy(ctx.client, MARKETS[i].id, beliefVector, collateral, numBuckets);
       }
       ctx.invalidateAll();
     } catch (e) {
       console.error('Batch submit failed:', e);
+      alert('Batch submit failed: ' + (e instanceof Error ? e.message : String(e)));
     }
     setSubmitting(false);
-  }, [ctx, allLoaded, savedBeliefs, markets, lb, ub]);
+  }, [ctx, allLoaded, savedBeliefs, perColState, markets, lb, ub]);
 
   // Remove a belief from a specific column
   const removeBelief = useCallback((colIdx: number) => {
@@ -204,15 +211,7 @@ export function SpMultiTermHeatmap() {
     });
   }, [allLoaded]);
 
-  // Create default bracket when a column is first selected
-  useEffect(() => {
-    if (selectedCol !== null && !savedBeliefs[selectedCol] && cols.length > selectedCol) {
-      const col = cols[selectedCol];
-      const range = ub - lb;
-      const hw = range * 0.12;
-      setSavedBeliefs(prev => ({ ...prev, [selectedCol]: { mean: col.mean, p10: col.mean - hw, p90: col.mean + hw } }));
-    }
-  }, [selectedCol, cols, lb, ub]);
+  // Bracket is created by BeliefInterceptor on first TradePanel render
 
   // Canvas drag handler
   const handleCanvasPointerDown = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -490,7 +489,7 @@ export function SpMultiTermHeatmap() {
                   <ConsensusChart marketId={selectedColData.marketId} height={300} zoomable />
                 </div>
                 <div style={{ flex: 3, minWidth: 0 }}>
-                  <TradePanel marketId={selectedColData.marketId} modes={['gaussian', 'range']} prediction={prediction} confidence={confidence} />
+                  <TradePanel marketId={selectedColData.marketId} modes={['gaussian', 'range']} prediction={prediction} confidence={confidence} amount={amount} onAmountChange={setAmount} />
                 </div>
               </div>
             </div>
@@ -499,7 +498,7 @@ export function SpMultiTermHeatmap() {
       </div>
     </div>
       <div style={{ marginTop: '1rem' }}>
-        <PositionTable marketId={activeMarketId} tabs={['open-orders', 'trade-history', 'market-positions']} />
+        <MultiMarketPositionTable markets={MARKETS.map(x => ({ id: x.id, label: x.label }))} />
       </div>
     </div>
   );

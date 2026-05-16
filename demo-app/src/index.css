@@ -1132,3 +1132,49 @@ body {
 }
 
 
+
+/* ── Multi-Market Position Table ── */
+.fs-position-table-grid {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.fs-position-table-grid th {
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  color: var(--fs-text-secondary, #94a3b8);
+  font-weight: 500;
+  border-bottom: 1px solid var(--fs-border, #1e293b);
+}
+
+.fs-position-table-grid td {
+  padding: 0.5rem 0.75rem;
+  color: var(--fs-text, #f1f5f9);
+  border-bottom: 1px solid var(--fs-border, #1e293b);
+}
+
+.fs-position-table-grid tbody tr:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.multi-pos-market-badge {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(96, 165, 250, 0.15);
+  border: 1px solid rgba(96, 165, 250, 0.3);
+  color: #93c5fd;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.fs-position-status {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.fs-position-status.open { color: #22c55e; }
+.fs-position-status.sold { color: #f59e0b; }
+.fs-position-status.settled { color: #94a3b8; }

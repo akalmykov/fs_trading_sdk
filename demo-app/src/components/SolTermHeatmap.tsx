@@ -163,7 +163,7 @@ export function SolTermHeatmap({ marketId }: SolTermHeatmapProps) {
   const [selectedCol, setSelectedCol] = useState<number | null>(null);
   const [hoverCol, setHoverCol] = useState<number | null>(null);
   const [savedBeliefs, setSavedBeliefs] = useState<Record<number, { mean: number; p10: number; p90: number }>>({});
-  const [perColState, setPerColState] = useState<Record<number, { prediction?: number; confidence?: number }>>({});
+  const [perColState, setPerColState] = useState<Record<number, { prediction?: number; confidence?: number; amount?: string }>>({});
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const dragRef = useRef<{ mode: 'move' | 'top' | 'bottom'; startY: number; startMean: number; startP10: number; startP90: number } | null>(null);
   const didDragRef = useRef(false);
@@ -176,6 +176,10 @@ export function SolTermHeatmap({ marketId }: SolTermHeatmapProps) {
   }, [selectedCol]);
   const setConfidence = useCallback((val: number) => {
     if (selectedCol !== null) setPerColState(prev => ({ ...prev, [selectedCol]: { ...prev[selectedCol], confidence: val } }));
+  }, [selectedCol]);
+  const amount = selectedCol !== null ? perColState[selectedCol]?.amount : undefined;
+  const setAmount = useCallback((val: string) => {
+    if (selectedCol !== null) setPerColState(prev => ({ ...prev, [selectedCol]: { ...prev[selectedCol], amount: val } }));
   }, [selectedCol]);
 
   const lb = market?.config?.lowerBound ?? 0;
@@ -236,15 +240,7 @@ export function SolTermHeatmap({ marketId }: SolTermHeatmapProps) {
     });
   }, [market, consensus, lb, ub, numBuckets]);
 
-  // Create default bracket when a column is first selected
-  useEffect(() => {
-    if (selectedCol !== null && !savedBeliefs[selectedCol] && cols.length > selectedCol) {
-      const col = cols[selectedCol];
-      const range = ub - lb;
-      const hw = range * 0.12;
-      setSavedBeliefs(prev => ({ ...prev, [selectedCol]: { mean: col.mean, p10: col.mean - hw, p90: col.mean + hw } }));
-    }
-  }, [selectedCol, cols, lb, ub]);
+  // Bracket is created by BeliefInterceptor on first TradePanel render
 
   // Canvas pointer handlers for bracket dragging
   const handleCanvasPointerDown = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -539,7 +535,7 @@ export function SolTermHeatmap({ marketId }: SolTermHeatmapProps) {
                   )}
                 </div>
                 <div style={{ flex: 3, minWidth: 0 }}>
-                  <TradePanel marketId={marketId} modes={['gaussian', 'range']} prediction={prediction} confidence={confidence} />
+                  <TradePanel marketId={marketId} modes={['gaussian', 'range']} prediction={prediction} confidence={confidence} amount={amount} onAmountChange={setAmount} />
                 </div>
               </div>
             </div>

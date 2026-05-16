@@ -15,6 +15,8 @@ export interface TradePanelProps extends TradeInputBaseProps {
   confidence?: number;
   onPredictionChange?: (prediction: number) => void;
   onConfidenceChange?: (confidence: number) => void;
+  amount?: string;
+  onAmountChange?: (amount: string) => void;
 }
 
 export function TradePanel({
@@ -24,6 +26,8 @@ export function TradePanel({
   confidence: controlledConfidence,
   onPredictionChange,
   onConfidenceChange,
+  amount: controlledAmount,
+  onAmountChange,
   onBuy,
   onError,
 }: TradePanelProps) {
@@ -36,7 +40,9 @@ export function TradePanel({
   const { execute: previewPayout } = usePreviewPayout(marketId);
 
   const [activeMode, setActiveMode] = useState<'gaussian' | 'range'>(modes[0]);
-  const [amount, setAmount] = useState('100');
+  const [amount, setAmountInternal] = useState(controlledAmount ?? '100');
+  const setAmount = useCallback((val: string) => { setAmountInternal(val); onAmountChange?.(val); }, [onAmountChange]);
+  useEffect(() => { if (controlledAmount !== undefined) setAmountInternal(controlledAmount); }, [controlledAmount]);
   const [uncontrolledPrediction, setUncontrolledPrediction] = useState<number | null>(null);
   const [uncontrolledConfidence, setUncontrolledConfidence] = useState(50); // 0-100 percentage
   const [rangeValues, setRangeValues] = useState<[number, number] | null>(null);
