@@ -494,7 +494,7 @@ export function TermStructureHeatmap({ marketId }: TermStructureHeatmapProps) {
                         )}
                       </div>
                       <div style={{ flex: 3, minWidth: 0 }}>
-                        <TradePanel marketId={marketId} modes={['gaussian', 'range']} prediction={prediction} confidence={confidence} amount={amount} onAmountChange={setAmount} />
+                        <TradePanel marketId={marketId} modes={['gaussian', 'range']} prediction={prediction} confidence={confidence} onPredictionChange={setPrediction} onConfidenceChange={setConfidence} amount={amount} onAmountChange={setAmount} />
                       </div>
                     </div>
                   </div>

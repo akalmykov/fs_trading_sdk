@@ -457,7 +457,7 @@ export function SpMultiTermHeatmap() {
             <button
               key={col.marketId}
               className="heatmap-row-remove-btn"
-              style={{ position: 'absolute', top: 4, left: `${(i / cols.length) * 100}%`, zIndex: 5 }}
+              style={{ position: 'absolute', top: 4, left: `${((i + 1) / cols.length) * 100}%`, marginLeft: -23, zIndex: 5 }}
               onClick={(e) => { e.stopPropagation(); removeBelief(i); }}
               aria-label="Remove belief"
             >×</button>
@@ -489,7 +489,7 @@ export function SpMultiTermHeatmap() {
                   <ConsensusChart marketId={selectedColData.marketId} height={300} zoomable />
                 </div>
                 <div style={{ flex: 3, minWidth: 0 }}>
-                  <TradePanel marketId={selectedColData.marketId} modes={['gaussian', 'range']} prediction={prediction} confidence={confidence} amount={amount} onAmountChange={setAmount} />
+                  <TradePanel marketId={selectedColData.marketId} modes={['gaussian', 'range']} prediction={prediction} confidence={confidence} onPredictionChange={setPrediction} onConfidenceChange={setConfidence} amount={amount} onAmountChange={setAmount} />
                 </div>
               </div>
             </div>
