@@ -312,7 +312,18 @@ export function BtcMultiTermHeatmap() {
 
   const selectedRowData = selectedRow !== null ? rows[selectedRow] : null;
 
+  const activeMarketId = selectedRowData?.marketId ?? 250;
+
   return (
+    <div>
+      <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
+        <div style={{ flex: 7, minWidth: 0 }}>
+          <MarketStats marketId={activeMarketId} />
+        </div>
+        <div style={{ flex: 3, minWidth: 0 }}>
+          <PasswordlessAuthWidget />
+        </div>
+      </div>
     <div className="heatmap-card">
       <div className="heatmap-header">
         <div>
@@ -389,6 +400,10 @@ export function BtcMultiTermHeatmap() {
           ))}
         </div>
         <div className="heatmap-x-label">Price (USD)</div>
+      </div>
+    </div>
+      <div style={{ marginTop: '1rem' }}>
+        <PositionTable marketId={activeMarketId} tabs={['open-orders', 'trade-history', 'market-positions']} />
       </div>
     </div>
   );

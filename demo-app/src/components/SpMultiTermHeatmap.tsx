@@ -9,7 +9,7 @@ import {
   computeStatistics,
   computePercentiles,
 } from '@functionspace/core';
-import { ConsensusChart, TradePanel } from '@functionspace/ui';
+import { ConsensusChart, TradePanel, MarketStats, PositionTable, PasswordlessAuthWidget } from '@functionspace/ui';
 
 /* ── Thermal colormap ── */
 const THERMAL_STOPS = [
@@ -333,8 +333,18 @@ export function SpMultiTermHeatmap() {
   }
 
   const selectedColData = selectedCol !== null ? cols[selectedCol] : null;
+  const activeMarketId = selectedColData?.marketId ?? 255;
 
   return (
+    <div>
+      <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
+        <div style={{ flex: 7, minWidth: 0 }}>
+          <MarketStats marketId={activeMarketId} />
+        </div>
+        <div style={{ flex: 3, minWidth: 0 }}>
+          <PasswordlessAuthWidget />
+        </div>
+      </div>
     <div className="sol-heatmap-card">
       <div className="heatmap-header">
         <div>
@@ -394,6 +404,10 @@ export function SpMultiTermHeatmap() {
             </div>
           </>
         )}
+      </div>
+    </div>
+      <div style={{ marginTop: '1rem' }}>
+        <PositionTable marketId={activeMarketId} tabs={['open-orders', 'trade-history', 'market-positions']} />
       </div>
     </div>
   );
