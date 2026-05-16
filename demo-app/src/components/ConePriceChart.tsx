@@ -167,9 +167,9 @@ export function ConePriceChart({
       const t = i / steps;
       const date = addDays(latDate, Math.round(t * days));
       const mean = latest.close + (prediction - latest.close) * t;
-      const halfWidth = sigma * t; // linearly widens
-      upper.push({ time: date, value: mean + halfWidth });
-      lower.push({ time: date, value: mean - halfWidth });
+      const halfWidth = sigma * t * 3; // ±3σ: edges where probability mass ≈ 0
+      upper.push({ time: date, value: Math.min(ub, mean + halfWidth) });
+      lower.push({ time: date, value: Math.max(lb, mean - halfWidth) });
       center.push({ time: date, value: mean });
     }
     return { upper, lower, center };
