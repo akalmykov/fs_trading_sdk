@@ -1,5 +1,4 @@
-import React, { useState, useEffect } from 'react';
-import { createPortal } from 'react-dom';
+import React, { useState } from 'react';
 import { FunctionSpaceProvider, useMarket } from '@functionspace/react';
 import { MarketExplorer } from '@functionspace/ui';
 import { config, widgetTheme } from './App';
@@ -13,23 +12,11 @@ import { BasicTradingLayout as TradingLayout } from './App_BasicTradingLayout';
 // import { CustomShapeLayout as TradingLayout } from './App_CustomShapeLayout';
 // import { TimelineBinaryLayout as TradingLayout } from './App_TimelineBinaryTradingLayout';
 
-/* Virtual multi-term card injected into the grid via portal */
-function MultiTermCardPortal({ onClick }: { onClick: () => void }) {
-  const [gridEl, setGridEl] = useState<Element | null>(null);
+/* Virtual multi-term card — rendered as sibling, styled to match grid */
+function MultiTermCard({ onClick }: { onClick: () => void }) {
   const m0 = useMarket(250), m1 = useMarket(251), m2 = useMarket(252), m3 = useMarket(253), m4 = useMarket(254);
   const allMarkets = [m0, m1, m2, m3, m4];
 
-  useEffect(() => {
-    const find = () => {
-      const el = document.querySelector('.fs-market-card-grid');
-      if (el) setGridEl(el);
-    };
-    find();
-    const timer = setInterval(find, 200);
-    return () => clearInterval(timer);
-  }, []);
-
-  // Aggregate stats
   const totalVolume = allMarkets.reduce((sum, m) => sum + (m.market?.totalVolume ?? 0), 0);
   const totalLiquidity = allMarkets.reduce((sum, m) => sum + (m.market?.poolBalance ?? 0), 0);
   const totalTraders = allMarkets.reduce((sum, m) => sum + (m.market?.positionsOpen ?? 0), 0);
@@ -39,10 +26,8 @@ function MultiTermCardPortal({ onClick }: { onClick: () => void }) {
     return n.toString();
   };
 
-  if (!gridEl) return null;
-
-  const card = (
-    <div className="fs-market-card" role="button" tabIndex={0} onClick={onClick} style={{ order: -1 }}>
+  return (
+    <div className="fs-market-card" role="button" tabIndex={0} onClick={onClick}>
       <div className="fs-market-card-hover-overlay" />
       <div className="fs-market-card-header">
         <h3 className="fs-market-card-title">Bitcoin Multi-Term Year-End Closing Price</h3>
@@ -97,8 +82,6 @@ function MultiTermCardPortal({ onClick }: { onClick: () => void }) {
       </div>
     </div>
   );
-
-  return createPortal(card, gridEl);
 }
 
 export default function App_MarketOverlay() {
@@ -120,12 +103,10 @@ export default function App_MarketOverlay() {
           state="open"
           featuredCategories={['sports', 'crypto']}
           pollInterval={5000}
+          cardsPrepend={<MultiTermCard onClick={() => setMultiTermOpen(true)} />}
         >
           {(marketId) => <TradingLayout marketId={marketId} />}
         </MarketExplorer>
-
-        {/* This card gets moved into the grid via DOM manipulation */}
-        <MultiTermCardPortal onClick={() => setMultiTermOpen(true)} />
       </div>
 
       {/* Multi-term overlay */}

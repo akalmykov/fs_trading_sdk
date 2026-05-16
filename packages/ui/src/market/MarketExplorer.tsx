@@ -26,6 +26,8 @@ export interface MarketExplorerProps {
   sortOptions?: SortOption[];
   searchPlaceholder?: string;
   filterBarMaxWidth?: string;
+  /** Extra cards rendered at the start of the Cards grid view */
+  cardsPrepend?: React.ReactNode;
 }
 
 // ── Tab labels ──
@@ -110,6 +112,7 @@ export function MarketExplorer({
   sortOptions,
   searchPlaceholder,
   filterBarMaxWidth,
+  cardsPrepend,
 }: MarketExplorerProps) {
   const ctx = useContext(FunctionSpaceContext);
   if (!ctx) throw new Error('MarketExplorer must be used within FunctionSpaceProvider');
@@ -174,7 +177,9 @@ export function MarketExplorer({
             error={filters.error}
             emptyMessage={emptyMessage}
             onSelect={handleSelect}
-          />
+          >
+            {cardsPrepend}
+          </MarketCardGrid>
         );
 
       case 'pulse':

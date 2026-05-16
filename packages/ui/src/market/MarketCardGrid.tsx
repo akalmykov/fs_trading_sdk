@@ -10,6 +10,7 @@ export interface MarketCardGridProps {
   loading?: boolean;
   error?: Error | null;
   emptyMessage?: string;
+  children?: React.ReactNode;
 }
 
 const SKELETON_COUNT = 6;
@@ -54,7 +55,7 @@ function SkeletonCard() {
   );
 }
 
-export function MarketCardGrid({ markets, onSelect, loading, error, emptyMessage }: MarketCardGridProps) {
+export function MarketCardGrid({ markets, onSelect, loading, error, emptyMessage, children }: MarketCardGridProps) {
   const ctx = useContext(FunctionSpaceContext);
   if (!ctx) throw new Error('MarketCardGrid must be used within FunctionSpaceProvider');
 
@@ -86,6 +87,7 @@ export function MarketCardGrid({ markets, onSelect, loading, error, emptyMessage
 
   return (
     <div className="fs-market-card-grid">
+      {children}
       {markets.map(m => (
         <MarketCard key={m.marketId} market={m} onSelect={onSelect} />
       ))}
