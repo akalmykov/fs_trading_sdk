@@ -8,13 +8,10 @@ import type { FSContext } from '@functionspace/react';
 import {
   computeStatistics,
   computePercentiles,
-  evaluateDensityCurve,
-  generateBelief,
 } from '@functionspace/core';
-import type { Region } from '@functionspace/core';
-import { ConsensusChart, ConsensusChartContent, TradePanel, PositionTable } from '@functionspace/ui';
+import { ConsensusChart, TradePanel } from '@functionspace/ui';
 
-/* ── Thermal colormap (same as BTC heatmap) ── */
+/* ── Thermal colormap ── */
 const THERMAL_STOPS = [
   { t: 0.00, r:  10, g:  12, b:  28 },
   { t: 0.10, r:  18, g:  28, b:  78 },
@@ -43,91 +40,41 @@ function thermalRGB(t: number): [number, number, number] {
   ];
 }
 
-/* ── Expiry columns ── */
-interface ExpiryCol {
-  year: number;
-  label: string;
-  isReal: boolean;
-  regions?: Region[];
-}
-
-const EXPIRY_COLS: ExpiryCol[] = [
-  { year: 2026, label: '2026', isReal: true },
-  {
-    year: 2027, label: '2027', isReal: false,
-    // SOL drifting up, slight right skew, peak ~$220
-    regions: [
-      { type: 'point', center: 220, spread: 65, weight: 1, skew: 0.2 },
-    ],
-  },
-  {
-    year: 2028, label: '2028', isReal: false,
-    // Broader, higher ~$320
-    regions: [
-      { type: 'point', center: 320, spread: 80, weight: 1 },
-    ],
-  },
-  {
-    year: 2029, label: '2029', isReal: false,
-    // Still rising ~$450, moderate spread
-    regions: [
-      { type: 'point', center: 450, spread: 100, weight: 1 },
-    ],
-  },
-  {
-    year: 2030, label: '2030', isReal: false,
-    // Wide uncertainty, fat tails
-    regions: [
-      { type: 'point', center: 600, spread: 180, weight: 1 },
-      { type: 'point', center: 50, spread: 30, weight: 0.12 },   // bear tail
-      { type: 'point', center: 1200, spread: 60, weight: 0.1 },  // bull tail
-    ],
-  },
+/* ── Market configs ── */
+const MARKETS = [
+  { id: 255, label: 'Jun', sublabel: 'June 2026' },
+  { id: 256, label: 'Jul', sublabel: 'July 2026' },
+  { id: 257, label: 'Aug', sublabel: 'August 2026' },
+  { id: 258, label: 'Sep', sublabel: 'September 2026' },
+  { id: 259, label: 'Oct', sublabel: 'October 2026' },
+  { id: 260, label: 'Nov', sublabel: 'November 2026' },
 ];
 
-const HEATMAP_ROWS = 200;  // vertical resolution (price axis)
-const COL_WIDTH = 120;     // px per expiry column
+const HEATMAP_ROWS = 200;
 
 /* ── Types ── */
 interface ColData {
-  year: number;
   label: string;
-  isReal: boolean;
-  densities: number[];  // length = HEATMAP_ROWS (bottom=lb, top=ub)
+  sublabel: string;
+  marketId: number;
+  densities: number[];
   maxDensity: number;
   mean: number;
   densityCurve: { x: number; y: number }[];
 }
 
-/* ── Synthetic PDF Chart (re-uses ConsensusChartContent with synthetic data) ── */
-function SyntheticPdfChart({ curve, height, market }: { curve: { x: number; y: number }[]; lb: number; ub: number; height: number; market: any }) {
-  const ctx = React.useContext(FunctionSpaceContext as unknown as React.Context<FSContext | null>);
-  const hasPreview = !!ctx?.previewBelief;
-  const syntheticConsensus = useMemo(() => ({ points: curve, config: market.config }), [curve, market.config]);
-  const subtitle = hasPreview ? 'Compare market consensus with your trade preview' : 'Current market probability density';
-  return (
-    <div className="fs-chart-container">
-      <div className="fs-chart-header">
-        <div className="fs-chart-header-row">
-          <div>
-            <h3 className="fs-chart-title">{market.title || 'Consensus'}</h3>
-            <p className="fs-chart-subtitle">{subtitle}</p>
-          </div>
-        </div>
-      </div>
-      <ConsensusChartContent market={market} consensus={syntheticConsensus} height={height} />
-    </div>
-  );
-}
-
 /* ── Component ── */
-export interface SolTermHeatmapProps {
-  marketId: string | number;
-}
+export function SpMultiTermHeatmap() {
+  const m0 = useMarket(255), c0 = useConsensus(255, 300);
+  const m1 = useMarket(256), c1 = useConsensus(256, 300);
+  const m2 = useMarket(257), c2 = useConsensus(257, 300);
+  const m3 = useMarket(258), c3 = useConsensus(258, 300);
+  const m4 = useMarket(259), c4 = useConsensus(259, 300);
+  const m5 = useMarket(260), c5 = useConsensus(260, 300);
 
-export function SolTermHeatmap({ marketId }: SolTermHeatmapProps) {
-  const { market } = useMarket(marketId);
-  const { consensus } = useConsensus(marketId, 300);
+  const markets = [m0, m1, m2, m3, m4, m5];
+  const consensuses = [c0, c1, c2, c3, c4, c5];
+
   const ctx = React.useContext(FunctionSpaceContext as unknown as React.Context<FSContext | null>);
   const [selectedCol, setSelectedCol] = useState<number | null>(null);
   const [hoverCol, setHoverCol] = useState<number | null>(null);
@@ -138,73 +85,64 @@ export function SolTermHeatmap({ marketId }: SolTermHeatmapProps) {
   const dragRef = useRef<{ mode: 'move' | 'top' | 'bottom'; startY: number; startMean: number; startP10: number; startP90: number } | null>(null);
   const didDragRef = useRef(false);
 
-  const lb = market?.config?.lowerBound ?? 0;
-  const ub = market?.config?.upperBound ?? 3000;
-  const numBuckets = market?.config?.numBuckets ?? 80;
+  const allLoaded = markets.every(m => m.market) && consensuses.every(c => c.consensus);
 
-  /* ── User belief bracket ── */
+  // All markets share bounds [3700, 11100]
+  const lb = markets[0]?.market?.config?.lowerBound ?? 3700;
+  const ub = markets[0]?.market?.config?.upperBound ?? 11100;
+
+  // User belief
   const userBelief = useMemo(() => {
     const belief = ctx?.previewBelief;
-    if (!belief || !market) return null;
+    if (!belief || selectedCol === null) return null;
     const stats = computeStatistics(belief, lb, ub);
     const pctiles = computePercentiles(belief, lb, ub);
     return { mean: stats.mean, p10: pctiles.p12_5, p90: pctiles.p87_5 };
-  }, [ctx?.previewBelief, market, lb, ub]);
+  }, [ctx?.previewBelief, selectedCol, lb, ub]);
 
-  // Save belief to the selected column whenever it changes
   useEffect(() => {
     if (userBelief && selectedCol !== null) {
       setSavedBeliefs(prev => ({ ...prev, [selectedCol]: userBelief }));
     }
   }, [userBelief, selectedCol]);
 
-  // Convert halfWidth to confidence
   const halfWidthToConfidence = useCallback((hw: number) => {
     const range = ub - lb;
     const minSigma = range * 0.01;
     const maxSigma = range * 0.20;
     const sigma = hw / 1.15;
-    return Math.max(0, Math.min(100, ((maxSigma - sigma) / (maxSigma - minSigma)) * 100));
+    return Math.max(0, Math.min(100, Math.round(((maxSigma - sigma) / (maxSigma - minSigma)) * 100)));
   }, [lb, ub]);
 
-  /* ── Build column data ── */
+  // Build column data
   const cols = useMemo<ColData[]>(() => {
-    if (!market || !consensus) return [];
+    if (!allLoaded) return [];
+    return MARKETS.map((cfg, i) => {
+      const market = markets[i].market!;
+      const consensus = consensuses[i].consensus!;
+      const stats = computeStatistics(market.consensus, lb, ub);
 
-    const stats = computeStatistics(market.consensus, lb, ub);
-
-    return EXPIRY_COLS.map((col) => {
-      let densityCurve: { x: number; y: number }[];
-      let mean: number;
-
-      if (col.isReal) {
-        densityCurve = consensus.points;
-        mean = stats.mean;
-      } else {
-        const belief = generateBelief(col.regions!, numBuckets, lb, ub);
-        densityCurve = evaluateDensityCurve(belief, lb, ub, 300);
-        const synStats = computeStatistics(belief, lb, ub);
-        mean = synStats.mean;
-      }
-
-      // Sample density along the price axis (bottom to top)
       const densities: number[] = [];
-      for (let i = 0; i < HEATMAP_ROWS; i++) {
-        const price = lb + (ub - lb) * (i + 0.5) / HEATMAP_ROWS;
-        let best = densityCurve[0];
-        let bestDist = Math.abs(densityCurve[0].x - price);
-        for (const pt of densityCurve) {
+      for (let row = 0; row < HEATMAP_ROWS; row++) {
+        const price = lb + (ub - lb) * (row + 0.5) / HEATMAP_ROWS;
+        let best = consensus.points[0];
+        let bestDist = Math.abs(consensus.points[0].x - price);
+        for (const pt of consensus.points) {
           const d = Math.abs(pt.x - price);
           if (d < bestDist) { best = pt; bestDist = d; }
         }
         densities.push(best.y);
       }
 
-      return { year: col.year, label: col.label, isReal: col.isReal, densities, maxDensity: Math.max(...densities), mean, densityCurve };
+      return {
+        label: cfg.label, sublabel: cfg.sublabel, marketId: cfg.id,
+        densities, maxDensity: Math.max(...densities), mean: stats.mean,
+        densityCurve: consensus.points,
+      };
     });
-  }, [market, consensus, lb, ub, numBuckets]);
+  }, [allLoaded]);
 
-  // Canvas pointer handlers for bracket dragging
+  // Canvas drag handler
   const handleCanvasPointerDown = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas || cols.length === 0) return;
@@ -215,12 +153,12 @@ export function SolTermHeatmap({ marketId }: SolTermHeatmapProps) {
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
-    // Find which column's bracket the user is clicking near
-    let targetCol: number | null = null;
+    // Find which column's bracket is near
     const allBeliefs: Record<number, { mean: number; p10: number; p90: number }> = { ...savedBeliefs };
     if (userBelief && selectedCol !== null) allBeliefs[selectedCol] = userBelief;
 
-    for (const [colIdx, belief] of Object.entries(allBeliefs)) {
+    let targetCol: number | null = null;
+    for (const [colIdx] of Object.entries(allBeliefs)) {
       const c = Number(colIdx);
       const bracketX = c * colW + colW - 12;
       if (Math.abs(x - bracketX) <= 15) { targetCol = c; break; }
@@ -268,17 +206,12 @@ export function SolTermHeatmap({ marketId }: SolTermHeatmapProps) {
         setConfidence(Math.round(halfWidthToConfidence(hw)));
       }
     };
-    const onUp = () => {
-      dragRef.current = null;
-      setTimeout(() => { didDragRef.current = false; }, 50);
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerup', onUp);
-    };
+    const onUp = () => { dragRef.current = null; setTimeout(() => { didDragRef.current = false; }, 50); window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp); };
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
   }, [selectedCol, cols, userBelief, savedBeliefs, lb, ub, halfWidthToConfidence]);
 
-  /* ── Render canvas ── */
+  // Render canvas
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || cols.length === 0) return;
@@ -287,7 +220,6 @@ export function SolTermHeatmap({ marketId }: SolTermHeatmapProps) {
     const w = canvas.clientWidth;
     const h = canvas.clientHeight;
     if (w === 0 || h === 0) return;
-
     canvas.width = w * dpr;
     canvas.height = h * dpr;
     const ctx2d = canvas.getContext('2d');
@@ -297,14 +229,11 @@ export function SolTermHeatmap({ marketId }: SolTermHeatmapProps) {
     const colW = w / cols.length;
     const cellH = h / HEATMAP_ROWS;
 
-    // Paint each column
     for (let c = 0; c < cols.length; c++) {
       const col = cols[c];
       for (let row = 0; row < HEATMAP_ROWS; row++) {
-        // Apply Gaussian blur vertically
         let blurred = 0, weightSum = 0;
-        const kernelSize = 4;
-        for (let k = -kernelSize; k <= kernelSize; k++) {
+        for (let k = -4; k <= 4; k++) {
           const idx = row + k;
           if (idx < 0 || idx >= HEATMAP_ROWS) continue;
           const weight = Math.exp(-0.5 * (k / 1.8) * (k / 1.8));
@@ -312,11 +241,9 @@ export function SolTermHeatmap({ marketId }: SolTermHeatmapProps) {
           weightSum += weight;
         }
         blurred /= weightSum;
-
         const t = col.maxDensity > 0 ? blurred / col.maxDensity : 0;
         const [r, g, b] = thermalRGB(t);
         ctx2d.fillStyle = `rgb(${r},${g},${b})`;
-        // Draw from bottom (high price) to top (low price) — invert y
         const y = h - (row + 1) * cellH;
         ctx2d.fillRect(c * colW, y, colW + 0.5, cellH + 0.5);
       }
@@ -325,13 +252,10 @@ export function SolTermHeatmap({ marketId }: SolTermHeatmapProps) {
       if (c > 0) {
         ctx2d.strokeStyle = 'rgba(255,255,255,0.1)';
         ctx2d.lineWidth = 1;
-        ctx2d.beginPath();
-        ctx2d.moveTo(c * colW, 0);
-        ctx2d.lineTo(c * colW, h);
-        ctx2d.stroke();
+        ctx2d.beginPath(); ctx2d.moveTo(c * colW, 0); ctx2d.lineTo(c * colW, h); ctx2d.stroke();
       }
 
-      // Hover/selected highlight
+      // Hover/selected
       if (c === selectedCol || c === hoverCol) {
         ctx2d.strokeStyle = c === selectedCol ? '#60a5fa' : 'rgba(96,165,250,0.4)';
         ctx2d.lineWidth = c === selectedCol ? 2 : 1;
@@ -339,7 +263,7 @@ export function SolTermHeatmap({ marketId }: SolTermHeatmapProps) {
       }
     }
 
-    // User belief brackets (vertical bars on columns with saved beliefs)
+    // Draw all belief brackets
     const allBeliefs: Record<number, { mean: number; p10: number; p90: number }> = { ...savedBeliefs };
     if (userBelief && selectedCol !== null) allBeliefs[selectedCol] = userBelief;
 
@@ -358,43 +282,27 @@ export function SolTermHeatmap({ marketId }: SolTermHeatmapProps) {
       ctx2d.lineWidth = 1.5;
       ctx2d.setLineDash([]);
 
-      ctx2d.beginPath();
-      ctx2d.moveTo(bracketX, p90Y);
-      ctx2d.lineTo(bracketX, p10Y);
-      ctx2d.stroke();
-
-      ctx2d.beginPath();
-      ctx2d.moveTo(bracketX - tickW / 2, p90Y);
-      ctx2d.lineTo(bracketX + tickW / 2, p90Y);
-      ctx2d.stroke();
-
-      ctx2d.beginPath();
-      ctx2d.moveTo(bracketX - tickW / 2, p10Y);
-      ctx2d.lineTo(bracketX + tickW / 2, p10Y);
-      ctx2d.stroke();
-
-      ctx2d.beginPath();
-      ctx2d.arc(bracketX, meanY, 4, 0, Math.PI * 2);
-      ctx2d.fillStyle = '#f59e0b';
-      ctx2d.fill();
-      ctx2d.strokeStyle = 'rgba(0,0,0,0.6)';
-      ctx2d.lineWidth = 1.5;
-      ctx2d.stroke();
+      ctx2d.beginPath(); ctx2d.moveTo(bracketX, p90Y); ctx2d.lineTo(bracketX, p10Y); ctx2d.stroke();
+      ctx2d.beginPath(); ctx2d.moveTo(bracketX - tickW / 2, p90Y); ctx2d.lineTo(bracketX + tickW / 2, p90Y); ctx2d.stroke();
+      ctx2d.beginPath(); ctx2d.moveTo(bracketX - tickW / 2, p10Y); ctx2d.lineTo(bracketX + tickW / 2, p10Y); ctx2d.stroke();
+      ctx2d.beginPath(); ctx2d.arc(bracketX, meanY, 4, 0, Math.PI * 2);
+      ctx2d.fillStyle = '#f59e0b'; ctx2d.fill();
+      ctx2d.strokeStyle = 'rgba(0,0,0,0.6)'; ctx2d.lineWidth = 1.5; ctx2d.stroke();
       ctx2d.globalAlpha = 1;
     }
   }, [cols, selectedCol, hoverCol, lb, ub, userBelief, savedBeliefs]);
 
-  /* ── Price axis ticks ── */
+  // Price axis ticks
   const yTicks = useMemo(() => {
     const ticks: { label: string; pct: number }[] = [];
-    const step = ub <= 500 ? 50 : ub <= 2000 ? 200 : ub <= 5000 ? 500 : 1000;
-    for (let v = 0; v <= ub; v += step) {
-      ticks.push({ label: `$${v}`, pct: ((v - lb) / (ub - lb)) * 100 });
+    const step = 1000;
+    for (let v = Math.ceil(lb / step) * step; v <= ub; v += step) {
+      ticks.push({ label: v.toLocaleString(), pct: ((v - lb) / (ub - lb)) * 100 });
     }
     return ticks;
   }, [lb, ub]);
 
-  /* ── Click handler ── */
+  // Click/hover handlers
   const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (didDragRef.current) return;
     const canvas = canvasRef.current;
@@ -403,9 +311,7 @@ export function SolTermHeatmap({ marketId }: SolTermHeatmapProps) {
     const x = e.clientX - rect.left;
     const colW = canvas.clientWidth / cols.length;
     const colIdx = Math.floor(x / colW);
-    if (colIdx >= 0 && colIdx < cols.length) {
-      setSelectedCol(prev => prev === colIdx ? null : colIdx);
-    }
+    if (colIdx >= 0 && colIdx < cols.length) setSelectedCol(prev => prev === colIdx ? null : colIdx);
   };
 
   const handleCanvasMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -418,10 +324,10 @@ export function SolTermHeatmap({ marketId }: SolTermHeatmapProps) {
     setHoverCol(colIdx >= 0 && colIdx < cols.length ? colIdx : null);
   };
 
-  if (!market || !consensus) {
+  if (!allLoaded) {
     return (
       <div className="sol-heatmap-card" style={{ minHeight: 300, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <span style={{ color: '#94a3b8' }}>Loading market data…</span>
+        <span style={{ color: '#94a3b8' }}>Loading S&P 500 market data…</span>
       </div>
     );
   }
@@ -432,14 +338,12 @@ export function SolTermHeatmap({ marketId }: SolTermHeatmapProps) {
     <div className="sol-heatmap-card">
       <div className="heatmap-header">
         <div>
-          <h2 className="heatmap-title">SOL Term Structure</h2>
-          <p className="heatmap-subtitle">Price × Time — click a column for details</p>
+          <h2 className="heatmap-title">S&P 500 Multi-Month Term Structure</h2>
+          <p className="heatmap-subtitle">Real consensus data — June through November 2026. Click a column to trade.</p>
         </div>
-        <div className="heatmap-view-badge">Transposed View</div>
       </div>
 
       <div className="sol-heatmap-body">
-        {/* Y-axis (price) */}
         <div className="sol-heatmap-y-axis">
           {yTicks.map(tick => (
             <span key={tick.label} className="sol-heatmap-y-tick" style={{ bottom: `${tick.pct}%` }}>
@@ -448,7 +352,6 @@ export function SolTermHeatmap({ marketId }: SolTermHeatmapProps) {
           ))}
         </div>
 
-        {/* Canvas */}
         <div className="sol-heatmap-canvas-wrap">
           <canvas
             ref={canvasRef}
@@ -458,10 +361,9 @@ export function SolTermHeatmap({ marketId }: SolTermHeatmapProps) {
             onMouseLeave={() => setHoverCol(null)}
             onPointerDown={handleCanvasPointerDown}
           />
-          {/* X-axis (time) labels */}
           <div className="sol-heatmap-x-axis">
             {cols.map((col, i) => (
-              <span key={col.year} className="sol-heatmap-x-tick" style={{ left: `${(i + 0.5) / cols.length * 100}%` }}>
+              <span key={col.marketId} className="sol-heatmap-x-tick" style={{ left: `${(i + 0.5) / cols.length * 100}%` }}>
                 {col.label}
               </span>
             ))}
@@ -475,24 +377,18 @@ export function SolTermHeatmap({ marketId }: SolTermHeatmapProps) {
           <>
             <div className="heatmap-detail-header">
               <h3>
-                {selectedColData.label} Distribution Detail
-                <span className="heatmap-selected-badge">{selectedColData.isReal ? 'Live Data' : 'Synthetic'}</span>
+                {selectedColData.sublabel} — S&P 500
+                <span className="heatmap-selected-badge">Live Data</span>
               </h3>
-              <button className="heatmap-collapse-btn" onClick={() => setSelectedCol(null)}>
-                Collapse ▴
-              </button>
+              <button className="heatmap-collapse-btn" onClick={() => setSelectedCol(null)}>Collapse ▴</button>
             </div>
             <div className="heatmap-detail-body">
               <div className="heatmap-detail-real">
                 <div style={{ flex: 7, minWidth: 0 }}>
-                  {selectedColData.isReal ? (
-                    <ConsensusChart marketId={marketId} height={300} zoomable />
-                  ) : (
-                    <SyntheticPdfChart curve={selectedColData.densityCurve} lb={lb} ub={ub} height={300} market={market} />
-                  )}
+                  <ConsensusChart marketId={selectedColData.marketId} height={300} zoomable />
                 </div>
                 <div style={{ flex: 3, minWidth: 0 }}>
-                  <TradePanel marketId={marketId} modes={['gaussian', 'range']} prediction={prediction} confidence={confidence} onPredictionChange={setPrediction} onConfidenceChange={setConfidence} />
+                  <TradePanel marketId={selectedColData.marketId} modes={['gaussian', 'range']} prediction={prediction} confidence={confidence} onPredictionChange={setPrediction} onConfidenceChange={setConfidence} />
                 </div>
               </div>
             </div>
