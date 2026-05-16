@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   useMarket,
   useConsensus,
@@ -132,7 +132,10 @@ export function SolTermHeatmap({ marketId }: SolTermHeatmapProps) {
   const [selectedCol, setSelectedCol] = useState<number | null>(null);
   const [hoverCol, setHoverCol] = useState<number | null>(null);
   const [savedBeliefs, setSavedBeliefs] = useState<Record<number, { mean: number; p10: number; p90: number }>>({});
+  const [prediction, setPrediction] = useState<number | undefined>(undefined);
+  const [confidence, setConfidence] = useState<number | undefined>(undefined);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const dragRef = useRef<{ mode: 'move' | 'top' | 'bottom'; startY: number; startMean: number; startP10: number; startP90: number } | null>(null);
 
   const lb = market?.config?.lowerBound ?? 0;
   const ub = market?.config?.upperBound ?? 3000;
@@ -153,6 +156,15 @@ export function SolTermHeatmap({ marketId }: SolTermHeatmapProps) {
       setSavedBeliefs(prev => ({ ...prev, [selectedCol]: userBelief }));
     }
   }, [userBelief, selectedCol]);
+
+  // Convert halfWidth to confidence
+  const halfWidthToConfidence = useCallback((hw: number) => {
+    const range = ub - lb;
+    const minSigma = range * 0.01;
+    const maxSigma = range * 0.20;
+    const sigma = hw / 1.15;
+    return Math.max(0, Math.min(100, ((maxSigma - sigma) / (maxSigma - minSigma)) * 100));
+  }, [lb, ub]);
 
   /* ── Build column data ── */
   const cols = useMemo<ColData[]>(() => {
@@ -190,6 +202,78 @@ export function SolTermHeatmap({ marketId }: SolTermHeatmapProps) {
       return { year: col.year, label: col.label, isReal: col.isReal, densities, maxDensity: Math.max(...densities), mean, densityCurve };
     });
   }, [market, consensus, lb, ub, numBuckets]);
+
+  // Canvas pointer handlers for bracket dragging
+  const handleCanvasPointerDown = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas || cols.length === 0) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const h = rect.height;
+    const colW = rect.width / cols.length;
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    // Find which column's bracket the user is clicking near
+    let targetCol: number | null = null;
+    const allBeliefs: Record<number, { mean: number; p10: number; p90: number }> = { ...savedBeliefs };
+    if (userBelief && selectedCol !== null) allBeliefs[selectedCol] = userBelief;
+
+    for (const [colIdx, belief] of Object.entries(allBeliefs)) {
+      const c = Number(colIdx);
+      const bracketX = c * colW + colW - 12;
+      if (Math.abs(x - bracketX) <= 15) { targetCol = c; break; }
+    }
+    if (targetCol === null) return;
+
+    const belief = allBeliefs[targetCol];
+    if (!belief) return;
+
+    const p10Y = h - ((belief.p10 - lb) / (ub - lb)) * h;
+    const p90Y = h - ((belief.p90 - lb) / (ub - lb)) * h;
+
+    let mode: 'move' | 'top' | 'bottom';
+    if (Math.abs(y - p90Y) < 10) mode = 'top';
+    else if (Math.abs(y - p10Y) < 10) mode = 'bottom';
+    else if (y > p90Y && y < p10Y) mode = 'move';
+    else return;
+
+    e.preventDefault();
+    e.stopPropagation();
+    if (targetCol !== selectedCol) setSelectedCol(targetCol);
+    dragRef.current = { mode, startY: e.clientY, startMean: belief.mean, startP10: belief.p10, startP90: belief.p90 };
+
+    const onMove = (ev: PointerEvent) => {
+      if (!dragRef.current) return;
+      const dy = ev.clientY - dragRef.current.startY;
+      const pricePerPx = (ub - lb) / h;
+      const dp = -dy * pricePerPx;
+
+      if (dragRef.current.mode === 'move') {
+        const newMean = Math.max(lb, Math.min(ub, dragRef.current.startMean + dp));
+        const hw = (dragRef.current.startP90 - dragRef.current.startP10) / 2;
+        setPrediction(+newMean.toFixed(2));
+        setConfidence(Math.round(halfWidthToConfidence(hw)));
+      } else if (dragRef.current.mode === 'top') {
+        const newP90 = Math.min(ub, Math.max(dragRef.current.startP10 + (ub - lb) * 0.02, dragRef.current.startP90 + dp));
+        const hw = (newP90 - dragRef.current.startP10) / 2;
+        setPrediction(+(dragRef.current.startP10 + hw).toFixed(2));
+        setConfidence(Math.round(halfWidthToConfidence(hw)));
+      } else {
+        const newP10 = Math.max(lb, Math.min(dragRef.current.startP90 - (ub - lb) * 0.02, dragRef.current.startP10 + dp));
+        const hw = (dragRef.current.startP90 - newP10) / 2;
+        setPrediction(+(newP10 + hw).toFixed(2));
+        setConfidence(Math.round(halfWidthToConfidence(hw)));
+      }
+    };
+    const onUp = () => {
+      dragRef.current = null;
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  }, [selectedCol, cols, userBelief, savedBeliefs, lb, ub, halfWidthToConfidence]);
 
   /* ── Render canvas ── */
   useEffect(() => {
@@ -368,6 +452,7 @@ export function SolTermHeatmap({ marketId }: SolTermHeatmapProps) {
             onClick={handleCanvasClick}
             onMouseMove={handleCanvasMove}
             onMouseLeave={() => setHoverCol(null)}
+            onPointerDown={handleCanvasPointerDown}
           />
           {/* X-axis (time) labels */}
           <div className="sol-heatmap-x-axis">
@@ -403,7 +488,7 @@ export function SolTermHeatmap({ marketId }: SolTermHeatmapProps) {
                   )}
                 </div>
                 <div style={{ flex: 3, minWidth: 0 }}>
-                  <TradePanel marketId={marketId} modes={['gaussian', 'range']} />
+                  <TradePanel marketId={marketId} modes={['gaussian', 'range']} prediction={prediction} confidence={confidence} onPredictionChange={setPrediction} onConfidenceChange={setConfidence} />
                 </div>
               </div>
             </div>

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   useMarket,
   useConsensus,
@@ -210,22 +210,65 @@ function SyntheticPdfChart({ curve, lb, ub, height, market }: { curve: { x: numb
   );
 }
 
-/* ── Belief bracket (drawn below selected heatmap row) ── */
-function BeliefBracket({ lb, ub, userBelief }: { lb: number; ub: number; userBelief: { mean: number; p10: number; p90: number } }) {
+/* ── Belief bracket (drawn below selected heatmap row, draggable) ── */
+function BeliefBracket({ lb, ub, userBelief, onDrag }: {
+  lb: number; ub: number;
+  userBelief: { mean: number; p10: number; p90: number };
+  onDrag?: (mean: number, halfWidth: number) => void;
+}) {
   const p10Pct = ((userBelief.p10 - lb) / (ub - lb)) * 100;
   const p90Pct = ((userBelief.p90 - lb) / (ub - lb)) * 100;
   const meanPct = ((userBelief.mean - lb) / (ub - lb)) * 100;
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const handlePointerDown = useCallback((e: React.PointerEvent, mode: 'left' | 'right' | 'move') => {
+    if (!onDrag || !containerRef.current) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const el = containerRef.current;
+    const startX = e.clientX;
+    const startMean = userBelief.mean;
+    const startP10 = userBelief.p10;
+    const startP90 = userBelief.p90;
+    const range = ub - lb;
+
+    const onMove = (ev: PointerEvent) => {
+      const rect = el.getBoundingClientRect();
+      const dx = ((ev.clientX - startX) / rect.width) * range;
+      if (mode === 'move') {
+        const newMean = Math.max(lb, Math.min(ub, startMean + dx));
+        const hw = (startP90 - startP10) / 2;
+        onDrag(newMean, hw);
+      } else if (mode === 'left') {
+        const newP10 = Math.max(lb, Math.min(startP90 - range * 0.02, startP10 + dx));
+        const newHw = (startP90 - newP10) / 2;
+        const newMean = newP10 + newHw;
+        onDrag(newMean, newHw);
+      } else {
+        const newP90 = Math.min(ub, Math.max(startP10 + range * 0.02, startP90 + dx));
+        const newHw = (newP90 - startP10) / 2;
+        const newMean = startP10 + newHw;
+        onDrag(newMean, newHw);
+      }
+    };
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  }, [onDrag, userBelief, lb, ub]);
 
   return (
-    <div className="heatmap-belief-bracket">
-      {/* Horizontal line */}
-      <div className="heatmap-bracket-line" style={{ left: `${p10Pct}%`, width: `${p90Pct - p10Pct}%` }} />
-      {/* Left tick */}
-      <div className="heatmap-bracket-tick" style={{ left: `${p10Pct}%` }} />
-      {/* Right tick */}
-      <div className="heatmap-bracket-tick" style={{ left: `${p90Pct}%` }} />
-      {/* Mean dot */}
-      <div className="heatmap-bracket-dot" style={{ left: `${meanPct}%` }} />
+    <div className="heatmap-belief-bracket" ref={containerRef}>
+      <div className="heatmap-bracket-line" style={{ left: `${p10Pct}%`, width: `${p90Pct - p10Pct}%`, cursor: onDrag ? 'grab' : undefined }}
+        onPointerDown={onDrag ? (e) => handlePointerDown(e, 'move') : undefined} />
+      <div className="heatmap-bracket-tick" style={{ left: `${p10Pct}%`, cursor: onDrag ? 'ew-resize' : undefined }}
+        onPointerDown={onDrag ? (e) => handlePointerDown(e, 'left') : undefined} />
+      <div className="heatmap-bracket-tick" style={{ left: `${p90Pct}%`, cursor: onDrag ? 'ew-resize' : undefined }}
+        onPointerDown={onDrag ? (e) => handlePointerDown(e, 'right') : undefined} />
+      <div className="heatmap-bracket-dot" style={{ left: `${meanPct}%`, cursor: onDrag ? 'grab' : undefined }}
+        onPointerDown={onDrag ? (e) => handlePointerDown(e, 'move') : undefined} />
     </div>
   );
 }
@@ -237,10 +280,26 @@ export function TermStructureHeatmap({ marketId }: TermStructureHeatmapProps) {
   const [selectedRow, setSelectedRow] = useState<number | null>(null);
   const [hoverRow, setHoverRow] = useState<number | null>(null);
   const [savedBeliefs, setSavedBeliefs] = useState<Record<number, { mean: number; p10: number; p90: number }>>({});
+  const [prediction, setPrediction] = useState<number | undefined>(undefined);
+  const [confidence, setConfidence] = useState<number | undefined>(undefined);
 
   const lb = market?.config?.lowerBound ?? 0;
   const ub = market?.config?.upperBound ?? 200000;
   const numBuckets = market?.config?.numBuckets ?? 80;
+
+  // Convert halfWidth to confidence (inverse of TradePanel's formula)
+  const halfWidthToConfidence = useCallback((hw: number) => {
+    const range = ub - lb;
+    const minSigma = range * 0.01;
+    const maxSigma = range * 0.20;
+    const sigma = hw / 1.15; // p12.5/p87.5 ≈ ±1.15σ
+    return Math.max(0, Math.min(100, ((maxSigma - sigma) / (maxSigma - minSigma)) * 100));
+  }, [lb, ub]);
+
+  const handleBracketDrag = useCallback((mean: number, halfWidth: number) => {
+    setPrediction(+mean.toFixed(2));
+    setConfidence(Math.round(halfWidthToConfidence(halfWidth)));
+  }, [halfWidthToConfidence]);
 
   /* ── Compute user belief bracket from preview ── */
   const userBelief = useMemo(() => {
@@ -365,7 +424,7 @@ export function TermStructureHeatmap({ marketId }: TermStructureHeatmapProps) {
 
             {/* User belief bracket — show saved belief for this row, or live belief if selected */}
             {(i === selectedRow ? userBelief : savedBeliefs[i]) && (
-              <BeliefBracket lb={lb} ub={ub} userBelief={(i === selectedRow ? userBelief : savedBeliefs[i])!} />
+              <BeliefBracket lb={lb} ub={ub} userBelief={(i === selectedRow ? userBelief : savedBeliefs[i])!} onDrag={(mean, hw) => { if (i !== selectedRow) setSelectedRow(i); handleBracketDrag(mean, hw); }} />
             )}
 
             {/* Inline detail panel — expands between rows */}
@@ -394,7 +453,7 @@ export function TermStructureHeatmap({ marketId }: TermStructureHeatmapProps) {
                         )}
                       </div>
                       <div style={{ flex: 3, minWidth: 0 }}>
-                        <TradePanel marketId={marketId} modes={['gaussian', 'range']} />
+                        <TradePanel marketId={marketId} modes={['gaussian', 'range']} prediction={prediction} confidence={confidence} onPredictionChange={setPrediction} onConfidenceChange={setConfidence} />
                       </div>
                     </div>
                   </div>
