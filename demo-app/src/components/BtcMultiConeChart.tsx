@@ -11,6 +11,7 @@ import { useMarket, useConsensus } from '@functionspace/react';
 type PricePoint = { time: string; value: number };
 type ConeState = { prediction: number; confidence: number };
 type DragMode = 'mean' | 'upper' | 'lower';
+type CursorTip = { x: number; y: number } | null;
 
 const MARKETS = [
   { id: 250, year: 2026, settlement: '2026-12-31', color: '#14b8a6', label: '2026', opacity: 0.12 },
@@ -68,6 +69,21 @@ function hexToRgba(hex: string, alpha: number) {
 function formatUsd(value: number) {
   if (Math.abs(value) >= 1000) return `$${(value / 1000).toFixed(value >= 100000 ? 0 : 1)}K`;
   return `$${value.toFixed(0)}`;
+}
+
+function densityMedian(points: { x: number; y: number }[]) {
+  const sorted = points
+    .filter(pt => Number.isFinite(pt.x) && Number.isFinite(pt.y) && pt.y >= 0)
+    .sort((a, b) => a.x - b.x);
+  if (sorted.length === 0) return null;
+  const total = sorted.reduce((sum, pt) => sum + pt.y, 0);
+  if (total <= 0) return sorted[Math.floor(sorted.length / 2)].x;
+  let acc = 0;
+  for (const pt of sorted) {
+    acc += pt.y;
+    if (acc >= total / 2) return pt.x;
+  }
+  return sorted[sorted.length - 1].x;
 }
 
 function generateFallbackBtcHistory(): PricePoint[] {
@@ -219,6 +235,7 @@ export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
 
   const [coneStates, setConeStates] = useState<Record<number, ConeState>>({});
   const [activeZoneIdx, setActiveZoneIdx] = useState<number | null>(null);
+  const [cursorTip, setCursorTip] = useState<CursorTip>(null);
   const [history, setHistory] = useState<PricePoint[]>(() => generateFallbackBtcHistory());
   const [historySource, setHistorySource] = useState<'loading' | 'coingecko' | 'binance' | 'cache' | 'fallback'>('loading');
   const [historyWarning, setHistoryWarning] = useState<string | null>(null);
@@ -583,14 +600,74 @@ export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
     const drawSettlementRule = (i: number) => {
       const cfg = MARKETS[i];
       const x = settlementXForZone(i, rect.width);
+      const ruleOpacity = hasFocus ? 0.35 : 0.46;
       ctx.save();
-      ctx.strokeStyle = hexToRgba(cfg.color, 0.35);
+      ctx.strokeStyle = hexToRgba(cfg.color, ruleOpacity);
       ctx.lineWidth = 2;
       ctx.setLineDash([4, 3]);
       ctx.beginPath();
       ctx.moveTo(x, 28);
       ctx.lineTo(x, rect.height - 34);
       ctx.stroke();
+      ctx.restore();
+    };
+
+    const drawConsensusReference = (i: number) => {
+      const consensus = consensuses[i];
+      const market = markets[i];
+      if (!consensus?.points?.length || !market) return;
+      const cfg = MARKETS[i];
+      const x = settlementXForZone(i, rect.width);
+      const points = consensus.points.filter(pt => Number.isFinite(pt.x) && Number.isFinite(pt.y));
+      const median = densityMedian(points);
+      const medianY = median === null ? null : priceSeries.priceToCoordinate(median);
+      const upperY = priceSeries.priceToCoordinate(market.config.upperBound);
+      const lowerY = priceSeries.priceToCoordinate(market.config.lowerBound);
+      const maxLabelX = Math.max(6, x - 42);
+      const maxLineStart = Math.max(0, x - 34);
+      const maxLineEnd = Math.max(0, x - 8);
+      const hasUserCone = Boolean(coneStates[i]);
+      const focusDim = hasFocus && i !== activeZoneIdx ? 0.72 : 1;
+      const referenceAlpha = (hasUserCone ? 0.52 : 0.85) * focusDim;
+
+      ctx.save();
+      ctx.textBaseline = 'middle';
+
+      const drawBound = (value: number, y: number | null) => {
+        if (y === null || y < 34 || y > rect.height - 38) return;
+        ctx.strokeStyle = hexToRgba(cfg.color, 0.36);
+        ctx.lineWidth = 1;
+        ctx.setLineDash([3, 4]);
+        ctx.beginPath();
+        ctx.moveTo(maxLineStart, y);
+        ctx.lineTo(maxLineEnd, y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = 'rgba(226, 232, 240, 0.5)';
+        ctx.font = '500 10px Inter, ui-sans-serif, system-ui, sans-serif';
+        ctx.textAlign = 'right';
+        ctx.fillText(formatUsd(value), maxLabelX, y);
+      };
+
+      drawBound(market.config.upperBound, upperY);
+      drawBound(market.config.lowerBound, lowerY);
+
+      if (median !== null && medianY !== null && medianY >= 32 && medianY <= rect.height - 36) {
+        ctx.strokeStyle = hexToRgba(cfg.color, referenceAlpha);
+        ctx.lineWidth = 2;
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.moveTo(Math.max(0, x - 16), medianY);
+        ctx.lineTo(Math.max(0, x - 4), medianY);
+        ctx.stroke();
+
+        ctx.shadowColor = hexToRgba(cfg.color, 0.18 * focusDim);
+        ctx.shadowBlur = hasUserCone ? 2 : 5;
+        ctx.fillStyle = hexToRgba(cfg.color, referenceAlpha);
+        ctx.font = '600 13px Inter, ui-sans-serif, system-ui, sans-serif';
+        ctx.textAlign = 'right';
+        ctx.fillText(formatUsd(median), Math.max(8, x - 22), medianY);
+      }
       ctx.restore();
     };
 
@@ -608,7 +685,7 @@ export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
       const p90 = Math.min(market.config.upperBound, state.prediction + halfWidth);
       const p10 = Math.max(market.config.lowerBound, state.prediction - halfWidth);
       const x = settlementXForZone(idx, rect.width);
-      const labelX = Math.min(rect.width - PRICE_SCALE_WIDTH - 6, x + 8);
+      const labelX = Math.min(rect.width - 68, x + 10);
       const meanY = priceSeries.priceToCoordinate(state.prediction);
       const p90Y = priceSeries.priceToCoordinate(p90);
       const p10Y = priceSeries.priceToCoordinate(p10);
@@ -681,10 +758,10 @@ export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
       const lastY = priceSeries.priceToCoordinate(last.x);
       if (lastY !== null) ctx.lineTo(x, lastY);
       ctx.closePath();
-      ctx.fillStyle = hexToRgba(cfg.color, 0.06);
+      ctx.fillStyle = hexToRgba(cfg.color, 0.08);
       ctx.fill();
-      ctx.strokeStyle = hexToRgba(cfg.color, 0.25);
-      ctx.lineWidth = 1;
+      ctx.strokeStyle = hexToRgba(cfg.color, 0.33);
+      ctx.lineWidth = 1.2;
       ctx.stroke();
       ctx.restore();
     };
@@ -843,10 +920,15 @@ export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
         const x = settlementXForZone(idx, rect.width);
         ctx.save();
         ctx.fillStyle = cfg.color;
+        ctx.shadowColor = hexToRgba(cfg.color, 0.35);
+        ctx.shadowBlur = 7;
         ctx.font = '700 11px Inter, ui-sans-serif, system-ui, sans-serif';
         ctx.textAlign = 'center';
         ctx.fillText(cfg.label, x, 22);
         ctx.restore();
+      }
+      for (let idx = 0; idx < MARKETS.length; idx += 1) {
+        drawConsensusReference(idx);
       }
       for (let idx = 0; idx < MARKETS.length; idx += 1) {
         drawPriceLabels(idx);
@@ -910,6 +992,9 @@ export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
     if (activeZoneIdx !== null) {
       drawCone(activeZoneIdx);
       drawSettlement(activeZoneIdx, false);
+    }
+    for (let idx = 0; idx < MARKETS.length; idx += 1) {
+      drawConsensusReference(idx);
     }
     for (let idx = 0; idx < MARKETS.length; idx += 1) {
       const cfg = MARKETS[idx];
@@ -1167,6 +1252,7 @@ export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
     const zoneIdx = getZone(point.x, point.width);
     if (zoneIdx < 0 || !markets[zoneIdx]) return;
     e.preventDefault();
+    setCursorTip(null);
     setActiveZoneIdx(zoneIdx);
 
     setConeStates(prev => {
@@ -1192,12 +1278,21 @@ export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
     const hoveredZone = getZone(point.x, point.width);
     if (!drawing) {
       setActiveZoneIdx(hoveredZone >= 0 ? hoveredZone : null);
+      setCursorTip(
+        hoveredZone >= 0 && !coneStates[hoveredZone]
+          ? {
+              x: clamp(point.x + 14, 10, Math.max(10, point.width - 128)),
+              y: clamp(point.y + 14, 36, Math.max(36, (containerRef.current?.clientHeight ?? 700) - 46)),
+            }
+          : null,
+      );
       return;
     }
     e.preventDefault();
+    setCursorTip(null);
     setActiveZoneIdx(drawing.zoneIdx);
     applyDrag(drawing.zoneIdx, drawing.mode, point.x, point.y, point.width);
-  }, [applyDrag, getStagePoint, getZone]);
+  }, [applyDrag, coneStates, getStagePoint, getZone]);
 
   const stopStageDrag = useCallback(() => {
     drawingRef.current = null;
@@ -1205,6 +1300,7 @@ export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
 
   const handleStageMouseLeave = useCallback(() => {
     drawingRef.current = null;
+    setCursorTip(null);
     setActiveZoneIdx(null);
   }, []);
 
@@ -1239,6 +1335,14 @@ export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
           onMouseLeave={handleStageMouseLeave}
           style={{ position: 'absolute', inset: 0, zIndex: 4, cursor: 'crosshair' }}
         />
+        {cursorTip && (
+          <div
+            className="btc-multi-cone-cursor-tip"
+            style={{ left: cursorTip.x, top: cursorTip.y }}
+          >
+            Draw your view
+          </div>
+        )}
       </div>
 
       <div className="cone-chart-footer btc-multi-cone-footer">

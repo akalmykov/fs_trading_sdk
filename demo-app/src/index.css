@@ -113,6 +113,24 @@ body {
   pointer-events: auto;
 }
 
+.btc-multi-cone-cursor-tip {
+  position: absolute;
+  z-index: 6;
+  pointer-events: none;
+  padding: 4px 8px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 4px;
+  background: rgba(7, 11, 18, 0.88);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.32), 0 0 18px rgba(56, 189, 248, 0.14);
+  color: rgba(248, 250, 252, 0.92);
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 0;
+  white-space: nowrap;
+  transform: translateZ(0);
+}
+
 /* ── Settlement line ── */
 .cone-chart-settlement-line {
   position: absolute;
