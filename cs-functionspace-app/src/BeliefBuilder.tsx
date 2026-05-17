@@ -14,8 +14,8 @@ const MAX_BRICK_H = 24;
 
 /* ── Color helpers ── */
 const COLOR_ANCHORS = [
-  { t: 0.00, hex: '#1c69d4' },  //  1 brick  — BMW blue (hue ~214°)
-  { t: 0.09, hex: '#1c69d4' },  //  3 bricks — still blue
+  { t: 0.00, hex: '#0066ff' },  //  1 brick  — vivid electric blue
+  { t: 0.09, hex: '#0066ff' },  //  3 bricks — still vivid blue
   { t: 0.30, hex: '#8b3dc8' },  // 10 bricks — vivid purple
   { t: 0.50, hex: '#e8105a' },  // 16 bricks — hot red-pink
   { t: 0.70, hex: '#0ea5a0' },  // 22 bricks — deep cyan-teal
