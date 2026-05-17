@@ -24,6 +24,7 @@ const BTC_HISTORY_CACHE_KEY = 'fs:btc-usd-history:1y:v1';
 const BTC_HISTORY_TTL_MS = 12 * 60 * 60 * 1000;
 const PDF_MAX_WIDTH = 60;
 const PRICE_SCALE_WIDTH = 96;
+const P10_P90_Z = 1.2815515655446004;
 
 function clamp(v: number, lo: number, hi: number) {
   return Math.min(hi, Math.max(lo, v));
@@ -178,7 +179,7 @@ function conePricesAtFraction(state: ConeState, frac: number, latestPrice: numbe
   const t = clamp(frac, 0, 1);
   const center = latestPrice + (state.prediction - latestPrice) * t;
   const sigma = confidenceToStdDev(state.confidence, lb, ub);
-  const halfWidth = sigma * t * 3;
+  const halfWidth = sigma * t * P10_P90_Z;
   return {
     center,
     upper: Math.min(ub, center + halfWidth),
@@ -562,6 +563,134 @@ export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
       ctx.restore();
     };
 
+    const drawIdleCorridors = () => {
+      const anchors = Object.entries(coneStates)
+        .map(([idx, state]) => {
+          const index = Number(idx);
+          const market = markets[index];
+          if (!market) return null;
+          const sigma = confidenceToStdDev(
+            state.confidence,
+            market.config.lowerBound,
+            market.config.upperBound,
+          );
+          const p10p90HalfWidth = sigma * P10_P90_Z;
+          return {
+            index,
+            x: settlementXForZone(index, rect.width),
+            median: state.prediction,
+            p10: Math.max(market.config.lowerBound, state.prediction - p10p90HalfWidth),
+            p90: Math.min(market.config.upperBound, state.prediction + p10p90HalfWidth),
+            color: MARKETS[index].color,
+          };
+        })
+        .filter((anchor): anchor is NonNullable<typeof anchor> => anchor !== null)
+        .sort((a, b) => a.index - b.index);
+
+      if (anchors.length === 0) return;
+
+      const pathAnchors = [
+        {
+          index: -1,
+          x: originX,
+          median: latestPrice,
+          p10: latestPrice,
+          p90: latestPrice,
+          color: '#22c55e',
+        },
+        ...anchors,
+      ];
+
+      for (let i = 0; i < pathAnchors.length - 1; i += 1) {
+        const left = pathAnchors[i];
+        const right = pathAnchors[i + 1];
+        const skipped = Math.max(0, right.index - left.index - 1);
+        const top: { x: number; y: number }[] = [];
+        const bottom: { x: number; y: number }[] = [];
+        const steps = 72;
+
+        for (let step = 0; step <= steps; step += 1) {
+          const t = step / steps;
+          const smooth = t * t * (3 - 2 * t);
+          const median = left.median + (right.median - left.median) * smooth;
+          const leftHalf = (left.p90 - left.p10) / 2;
+          const rightHalf = (right.p90 - right.p10) / 2;
+          const baseHalf = leftHalf + (rightHalf - leftHalf) * smooth;
+          const uncertainty = 1 + skipped * 0.15 * Math.sin(Math.PI * t);
+          const half = baseHalf * uncertainty;
+          const x = left.x + (right.x - left.x) * smooth;
+          const topY = priceSeries.priceToCoordinate(median + half);
+          const bottomY = priceSeries.priceToCoordinate(median - half);
+          if (topY === null || bottomY === null) continue;
+          top.push({ x, y: topY });
+          bottom.push({ x, y: bottomY });
+        }
+
+        if (top.length < 2 || bottom.length < 2) continue;
+
+        const gradient = ctx.createLinearGradient(left.x, 0, right.x, 0);
+        gradient.addColorStop(0, hexToRgba(left.color, 0.1));
+        gradient.addColorStop(1, hexToRgba(right.color, 0.1));
+
+        ctx.save();
+        ctx.beginPath();
+        top.forEach((pt, pointIdx) => {
+          if (pointIdx === 0) ctx.moveTo(pt.x, pt.y);
+          else ctx.lineTo(pt.x, pt.y);
+        });
+        for (let pointIdx = bottom.length - 1; pointIdx >= 0; pointIdx -= 1) {
+          ctx.lineTo(bottom[pointIdx].x, bottom[pointIdx].y);
+        }
+        ctx.closePath();
+        ctx.fillStyle = gradient;
+        ctx.fill();
+
+        ctx.lineWidth = 1.2;
+        ctx.setLineDash([]);
+        const topStroke = ctx.createLinearGradient(left.x, 0, right.x, 0);
+        topStroke.addColorStop(0, hexToRgba(left.color, 0.35));
+        topStroke.addColorStop(1, hexToRgba(right.color, 0.35));
+        ctx.strokeStyle = topStroke;
+        ctx.beginPath();
+        top.forEach((pt, pointIdx) => {
+          if (pointIdx === 0) ctx.moveTo(pt.x, pt.y);
+          else ctx.lineTo(pt.x, pt.y);
+        });
+        ctx.stroke();
+
+        const bottomStroke = ctx.createLinearGradient(left.x, 0, right.x, 0);
+        bottomStroke.addColorStop(0, hexToRgba(left.color, 0.35));
+        bottomStroke.addColorStop(1, hexToRgba(right.color, 0.35));
+        ctx.strokeStyle = bottomStroke;
+        ctx.beginPath();
+        bottom.forEach((pt, pointIdx) => {
+          if (pointIdx === 0) ctx.moveTo(pt.x, pt.y);
+          else ctx.lineTo(pt.x, pt.y);
+        });
+        ctx.stroke();
+        ctx.restore();
+      }
+    };
+
+    if (!hasFocus) {
+      drawIdleCorridors();
+      drawLatestPrice();
+      for (let idx = 0; idx < MARKETS.length; idx += 1) {
+        drawSettlementRule(idx);
+      }
+      for (let idx = 0; idx < MARKETS.length; idx += 1) {
+        const cfg = MARKETS[idx];
+        const x = settlementXForZone(idx, rect.width);
+        ctx.save();
+        ctx.fillStyle = cfg.color;
+        ctx.font = '700 11px Inter, ui-sans-serif, system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(cfg.label, x, 22);
+        ctx.restore();
+      }
+      return;
+    }
+
     for (let idx = MARKETS.length - 1; idx >= 0; idx -= 1) {
       if (idx !== activeZoneIdx) drawCone(idx);
     }
@@ -853,7 +982,7 @@ export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
       }
 
       const centerAtX = latestPrice + (current.prediction - latestPrice) * frac;
-      const sigma = Math.abs(price - centerAtX) / (frac * 3);
+      const sigma = Math.abs(price - centerAtX) / (frac * P10_P90_Z);
       return {
         ...prev,
         [zoneIdx]: {
