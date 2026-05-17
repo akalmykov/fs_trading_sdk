@@ -706,3 +706,153 @@ body {
 @media (max-width: 768px) {
   .betting-panel { width: 100%; }
 }
+
+/* ── Belief Builder ── */
+.bb-container { width: 502px; max-width: 100%; }
+.bb-context { font-size: 11px; color: var(--muted); margin-bottom: 6px; }
+
+.bb-grid {
+  display: flex;
+  gap: 2px;
+  height: 224px;
+  align-items: flex-end;
+  background: var(--surface-soft);
+  border: 1px solid var(--hairline);
+  position: relative;
+}
+
+.bb-col {
+  width: 34px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  position: relative;
+  cursor: pointer;
+}
+
+.bb-col.hovered { background: rgba(247, 247, 247, 0.8); }
+
+.bb-consensus-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--hairline);
+  border-top: 1px solid var(--muted-soft);
+}
+
+.bb-brick-stack {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column-reverse;
+  width: 100%;
+}
+
+.bb-brick {
+  width: 100%;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.bb-brick:hover { opacity: 0.7; }
+
+.bb-ghost {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  border: 1.5px dashed rgba(28, 105, 212, 0.4);
+  border-radius: 3px;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.bb-labels {
+  display: flex;
+  gap: 2px;
+  margin-top: 4px;
+}
+
+.bb-label {
+  width: 34px;
+  text-align: center;
+}
+
+.bb-label-round { display: block; font-size: 10px; font-weight: 700; color: var(--muted); }
+.bb-label.active .bb-label-round { color: var(--ink); }
+.bb-label-pct { display: block; font-size: 9px; color: var(--muted-soft); }
+
+.bb-buttons {
+  display: flex;
+  gap: 2px;
+  margin-top: 3px;
+}
+
+.bb-add-btn {
+  width: 34px;
+  height: 20px;
+  border: 1px solid var(--hairline);
+  background: var(--canvas);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bb-add-btn:hover { border-color: var(--primary); color: var(--primary); }
+
+.bb-multipliers {
+  display: flex;
+  gap: 2px;
+  margin-top: 2px;
+}
+
+.bb-mult {
+  width: 34px;
+  text-align: center;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.bb-inference {
+  font-size: 11px;
+  color: var(--primary);
+  font-weight: 700;
+  margin-top: 8px;
+}
+
+.bb-summary {
+  display: flex;
+  gap: 12px;
+  font-size: 11px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.bb-progress-track {
+  width: 100%;
+  height: 3px;
+  background: var(--hairline);
+  border-radius: 2px;
+  margin-top: 6px;
+  overflow: hidden;
+}
+
+.bb-progress-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 150ms ease-out;
+}
+
+.bb-hint {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 6px;
+  min-height: 16px;
+}

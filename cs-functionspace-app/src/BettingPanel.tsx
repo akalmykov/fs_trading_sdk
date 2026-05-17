@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { Match } from './data';
+import { BeliefBuilder } from './BeliefBuilder';
 
 interface BettingPanelProps {
   match: Match;
@@ -7,28 +8,22 @@ interface BettingPanelProps {
 }
 
 const QUICK_STAKES = [10, 25, 50, 100];
-const ROUNDS = Array.from({ length: 13 }, (_, i) => i + 13); // 13–25
 
 export function BettingPanel({ match, onClose }: BettingPanelProps) {
   const [activeMarket, setActiveMarket] = useState(match.markets[0]);
   const [stake, setStake] = useState('50');
-  const [bricks, setBricks] = useState<Record<number, number>>({});
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [explainerOpen, setExplainerOpen] = useState(false);
   const [evOpen, setEvOpen] = useState(false);
+  const [beliefState, setBeliefState] = useState<{ userMean: number; totalBricks: number } | null>(null);
 
-  const totalBricks = Object.values(bricks).reduce((a, b) => a + b, 0);
-  const columnsUsed = Object.keys(bricks).length;
   const stakeNum = parseFloat(stake) || 0;
-  const canSubmit = columnsUsed >= 3 && stakeNum > 0;
+  const canSubmit = (beliefState?.totalBricks ?? 0) >= 3 && stakeNum > 0;
 
-  // Compute user mean from bricks
-  const userMean = totalBricks > 0
-    ? Object.entries(bricks).reduce((sum, [r, count]) => sum + Number(r) * count, 0) / totalBricks
-    : null;
+  const userMean = beliefState?.userMean ?? null;
 
-  const marketMean = 23.4; // mock consensus
+  const marketMean = 21.9; // consensus mean from BeliefBuilder
   const edge = userMean !== null ? (userMean - marketMean).toFixed(1) : null;
   const estPayout = stakeNum > 0 && userMean !== null ? (stakeNum * 2.36).toFixed(0) : null;
 
@@ -93,30 +88,8 @@ export function BettingPanel({ match, onClose }: BettingPanelProps) {
                   <span>{mapLabel} · Total Rounds</span>
                   <button className="panel-link" onClick={() => setExplainerOpen(!explainerOpen)}>What is this? ›</button>
                 </div>
-                <div className="panel-consensus">
-                  Market consensus: {marketMean} rounds avg · P(under 23.5): 52%
-                </div>
 
-                {/* Simplified brick builder */}
-                <div className="brick-grid">
-                  {ROUNDS.map(r => (
-                    <div key={r} className="brick-col">
-                      <div className="brick-stack">
-                        {Array.from({ length: bricks[r] || 0 }).map((_, i) => (
-                          <div key={i} className="brick" />
-                        ))}
-                      </div>
-                      <button className="brick-add" onClick={() => setBricks(prev => ({ ...prev, [r]: (prev[r] || 0) + 1 }))}>+</button>
-                      <span className="brick-label">{r}{r === 25 ? '+' : ''}</span>
-                    </div>
-                  ))}
-                </div>
-
-                {userMean !== null && (
-                  <div className="panel-inference">
-                    Your implied P(under 23.5): {((Object.entries(bricks).filter(([r]) => Number(r) < 24).reduce((s, [, c]) => s + c, 0) / totalBricks) * 100).toFixed(0)}% · Your mean: {userMean.toFixed(1)} rounds
-                  </div>
-                )}
+                <BeliefBuilder onBeliefChange={(_userP, mean, total) => setBeliefState({ userMean: mean, totalBricks: total })} />
               </div>
 
               {/* Position Summary */}
