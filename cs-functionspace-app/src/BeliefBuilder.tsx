@@ -178,7 +178,7 @@ export function BeliefBuilder({ onBeliefChange }: BeliefBuilderProps) {
   const [fallingCols, setFallingCols] = useState<Set<number>>(new Set());
   const [flashCols, setFlashCols] = useState<Record<number, string>>({});
   const particleCanvasRef = useRef<HTMLCanvasElement>(null);
-  const particlesRef = useRef<Array<{ x: number; y: number; angle: number; speed: number; size: number; life: number; born: number; color: string }>>([]);
+  const particlesRef = useRef<Array<{ x: number; y: number; angle: number; speed: number; length: number; width: number; startOpacity: number; size: number; life: number; born: number; color: string }>>([]);
   const animFrameRef = useRef<number | null>(null);
   const gridRef = useRef<HTMLDivElement>(null);
   const reducedMotion = useRef(typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
@@ -192,7 +192,11 @@ export function BeliefBuilder({ onBeliefChange }: BeliefBuilderProps) {
 
   useEffect(() => { if (onBeliefChange && totalBricks > 0) onBeliefChange(userP, userMean!, totalBricks); }, [userP, userMean, totalBricks]);
 
-  // Particle animation loop
+  // Particle system constants
+  const GRAVITY = 600;
+  const CANVAS_PAD_X = 60;
+  const CANVAS_PAD_Y = 140;
+
   const tickParticles = useCallback(() => {
     const canvas = particleCanvasRef.current;
     if (!canvas) return;
@@ -203,13 +207,24 @@ export function BeliefBuilder({ onBeliefChange }: BeliefBuilderProps) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     for (const p of particlesRef.current) {
       const dt = (now - p.born) / 1000;
-      const x = p.x + Math.cos(p.angle) * p.speed * dt;
-      const y = p.y - Math.sin(p.angle) * p.speed * dt + 0.5 * 800 * dt * dt;
-      ctx.globalAlpha = Math.max(0, 1 - (now - p.born) / p.life);
+      const lifeFraction = 1 - dt / (p.life / 1000);
+      if (lifeFraction <= 0) continue;
+      const dx = Math.cos(p.angle) * p.speed * dt;
+      const dy = -Math.sin(p.angle) * p.speed * dt + 0.5 * GRAVITY * dt * dt;
+      const x = p.x + dx;
+      const y = p.y + dy;
+      const vx = Math.cos(p.angle) * p.speed;
+      const vy = -Math.sin(p.angle) * p.speed + GRAVITY * dt;
+      const travelAngle = Math.atan2(vy, vx);
+      const len = p.length * lifeFraction;
+      const wid = p.width * lifeFraction;
+      ctx.save();
+      ctx.globalAlpha = lifeFraction * p.startOpacity;
       ctx.fillStyle = p.color;
-      ctx.beginPath();
-      ctx.arc(x, y, p.size, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.translate(x, y);
+      ctx.rotate(travelAngle);
+      ctx.fillRect(-len / 2, -wid / 2, len, wid);
+      ctx.restore();
     }
     ctx.globalAlpha = 1;
     if (particlesRef.current.length > 0) {
@@ -219,33 +234,52 @@ export function BeliefBuilder({ onBeliefChange }: BeliefBuilderProps) {
     }
   }, []);
 
-  const spawnSparks = useCallback((col: number, count: number, color: string) => {
+  const SPARK_COLOURS = ['#ffffff', '#fff4c2', '#ffcc00', '#ff8c00', '#ff4500', '#e83010'];
+  const SPARK_WEIGHTS = [0.05, 0.10, 0.15, 0.25, 0.28, 0.17];
+
+  const randomSparkColour = useCallback(() => {
+    const r = Math.random();
+    let cum = 0;
+    for (let i = 0; i < SPARK_WEIGHTS.length; i++) {
+      cum += SPARK_WEIGHTS[i];
+      if (r < cum) return SPARK_COLOURS[i];
+    }
+    return SPARK_COLOURS[5];
+  }, []);
+
+  const spawnSparks = useCallback((col: number, count: number) => {
     if (reducedMotion.current) return;
     const canvas = particleCanvasRef.current;
     const grid = gridRef.current;
     if (!canvas || !grid) return;
-    const rect = grid.getBoundingClientRect();
-    canvas.width = rect.width;
-    canvas.height = rect.height;
-    const colX = col * (COL_PITCH) + COL_W / 2;
+    const gridRect = grid.getBoundingClientRect();
+    canvas.width = gridRect.width + CANVAS_PAD_X * 2;
+    canvas.height = GRID_H + CANVAS_PAD_Y;
+    // Impact point: bottom edge of new brick
     const brickH = getBrickH(count);
     const stackH = count * brickH;
-    const landingY = GRID_H - stackH;
-    const sparkCount = Math.round(6 + (count - 1) / 31 * 8);
+    const impactY = (GRID_H - stackH + brickH) + CANVAS_PAD_Y; // canvas-local, bottom of new brick
+    const colX = col * COL_PITCH + CANVAS_PAD_X; // canvas-local X
+    const sparkCount = Math.round(10 + (count - 1) / 31 * 10);
     for (let i = 0; i < sparkCount; i++) {
+      const speed = 280 + Math.random() * 240;
+      const angle = (-20 + Math.random() * 220) * Math.PI / 180;
       particlesRef.current.push({
-        x: colX + (Math.random() - 0.5) * 20,
-        y: landingY,
-        angle: (30 + Math.random() * 120) * Math.PI / 180,
-        speed: 120 + Math.random() * 100,
-        size: 2.5 + Math.random() * 2,
-        life: 180 + Math.random() * 140,
+        x: colX + Math.random() * COL_W,
+        y: impactY,
+        angle,
+        speed,
+        length: speed * 0.055,
+        width: 2.0,
+        startOpacity: 0.75 + Math.random() * 0.25,
+        size: 0,
+        life: 280 + Math.random() * 200,
         born: performance.now(),
-        color,
+        color: randomSparkColour(),
       });
     }
     if (!animFrameRef.current) animFrameRef.current = requestAnimationFrame(tickParticles);
-  }, [tickParticles]);
+  }, [tickParticles, randomSparkColour]);
 
   // Cleanup animation frame on unmount
   useEffect(() => () => { if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current); }, []);
@@ -269,7 +303,7 @@ export function BeliefBuilder({ onBeliefChange }: BeliefBuilderProps) {
       setTimeout(() => setFlashCols(prev => { const n = { ...prev }; delete n[col]; return n; }), 320);
 
       // Spawn sparks at t=160ms
-      setTimeout(() => spawnSparks(col, newCount, color), 160);
+      setTimeout(() => spawnSparks(col, newCount), 160);
     }
   }, [bricks, totalBricks, spawnSparks]);
 
@@ -285,6 +319,12 @@ export function BeliefBuilder({ onBeliefChange }: BeliefBuilderProps) {
       <div className="bb-context">
         <span>Market consensus: {CONSENSUS_MEAN.toFixed(1)} rounds avg · P(under 23.5): 83.5%</span>
         {totalBricks > 0 && <button className="bb-reset" onClick={() => setBricks(new Array(COLUMNS).fill(0))}>Reset</button>}
+      </div>
+
+      <div className="bb-counts">
+        {bricks.map((count, i) => (
+          <div key={i} className="bb-count">{count > 0 ? count : '–'}</div>
+        ))}
       </div>
 
       <div className="bb-grid" ref={gridRef} onMouseLeave={() => setHoverCol(null)}>

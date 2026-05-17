@@ -183,13 +183,13 @@ body {
   position: absolute;
   z-index: 8;
   top: 48px;
-  min-width: 72px;
+  min-width: 86px;
   height: 30px;
   transform: translateX(-50%) scale(1);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 0;
   padding: 5px 10px 5px 12px;
   border: 1px solid;
   border-radius: 20px;
@@ -208,7 +208,7 @@ body {
 }
 
 .btc-multi-cone-stake-chip.editing {
-  min-width: 100px;
+  min-width: 84px;
   border-color: rgba(255, 255, 255, 0.8) !important;
   background: rgba(0, 0, 0, 0.62);
 }
@@ -234,26 +234,10 @@ body {
   white-space: nowrap;
 }
 
-.btc-multi-cone-stake-pencil {
-  width: 12px;
-  height: 12px;
-  opacity: 0.7;
-  color: currentColor;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  transition: opacity 80ms ease;
-}
-
-.btc-multi-cone-stake-chip:hover .btc-multi-cone-stake-pencil {
-  opacity: 1;
-}
-
 .btc-multi-cone-stake-caret {
   width: 1px;
   height: 12px;
+  margin-left: 1px;
   background: rgba(255, 255, 255, 0.92);
   animation: btcStakeCaret 1060ms steps(2, start) infinite;
 }

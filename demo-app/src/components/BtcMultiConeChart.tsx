@@ -1652,7 +1652,7 @@ export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
           const isEditing = stakeEditor?.idx === idx;
           const displayValue = isEditing
             ? `$${stakeEditor.buffer}`
-            : formatStake(stake);
+            : `Bet: ${formatStake(stake)}`;
           return (
             <button
               key={`stake-${idx}-${exiting ? 'exiting' : 'active'}`}
@@ -1687,14 +1687,7 @@ export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
               }}
             >
               <span className="btc-multi-cone-stake-amount">{displayValue}</span>
-              {isEditing ? (
-                <span className="btc-multi-cone-stake-caret" aria-hidden="true" />
-              ) : (
-                <svg className="btc-multi-cone-stake-pencil" viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M12 20h9" />
-                  <path d="m16.5 3.5 4 4L8 20l-5 1 1-5 12.5-12.5Z" />
-                </svg>
-              )}
+              {isEditing && <span className="btc-multi-cone-stake-caret" aria-hidden="true" />}
             </button>
           );
         })}

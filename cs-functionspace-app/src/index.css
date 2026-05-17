@@ -711,6 +711,20 @@ body {
 .bb-container { width: 502px; max-width: 100%; }
 .bb-context { font-size: 11px; color: var(--muted); margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
 
+.bb-counts {
+  display: flex;
+  gap: 2px;
+  margin-bottom: 2px;
+}
+
+.bb-count {
+  width: 34px;
+  text-align: center;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--muted-soft);
+}
+
 .bb-reset {
   border: none;
   background: none;
@@ -731,14 +745,14 @@ body {
   background: var(--surface-soft);
   border: 1px solid var(--hairline);
   position: relative;
-  overflow: hidden;
 }
 
 .bb-particle-canvas {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
+  top: -140px;
+  left: -60px;
+  width: calc(100% + 120px);
+  height: calc(100% + 140px);
   pointer-events: none;
   z-index: 10;
 }
