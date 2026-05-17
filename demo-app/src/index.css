@@ -168,6 +168,21 @@ body {
   flex-wrap: wrap;
 }
 
+.btc-multi-cone-footer {
+  justify-content: stretch;
+}
+
+.btc-multi-cone-pills {
+  position: absolute;
+  left: 52px;
+  right: 96px;
+  bottom: 0.5rem;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0;
+  pointer-events: none;
+}
+
 .cone-info-pill {
   display: inline-flex;
   align-items: center;
@@ -178,6 +193,11 @@ body {
   border: 1px solid rgba(255,255,255,0.08);
   font-size: 0.72rem;
   color: #cbd5e1;
+}
+
+.btc-multi-cone-pills .cone-info-pill {
+  justify-self: center;
+  white-space: nowrap;
 }
 
 .cone-info-pill strong {

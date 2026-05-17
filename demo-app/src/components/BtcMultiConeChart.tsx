@@ -373,7 +373,7 @@ export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
 
     const focusProgress = focusProgressRef.current;
     const hasFocus = activeZoneIdx !== null && focusProgress > 0.01;
-    const inactiveFactor = hasFocus ? 1 - (0.72 * focusProgress) : 1;
+    const inactiveFactor = hasFocus ? 1 - (0.64 * focusProgress) : 1;
     const dimAlpha = 0.62 * focusProgress;
     const activeZoneLeft = activeZoneIdx === null
       ? null
@@ -1125,21 +1125,6 @@ export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
 
   return (
     <div className="cone-chart-card btc-multi-cone-card" style={{ height }}>
-      <div className="cone-chart-toolbar">
-        <div>
-          <span className="cone-chart-eyebrow">Multi-Cone View</span>
-          <strong>Bitcoin Multi-Term Annual Closing Price #2</strong>
-        </div>
-        <div className="cone-chart-legend">
-          {MARKETS.map((m, i) => (
-            <span key={m.year}>
-              <i className="legend-swatch" style={{ background: m.color }} />
-              {m.label}{coneStates[i] ? ` ${formatUsd(coneStates[i].prediction)}` : ''}
-            </span>
-          ))}
-        </div>
-      </div>
-
       <div
         className="cone-chart-stage"
         onMouseDownCapture={handleStageMouseDown}
@@ -1159,16 +1144,22 @@ export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
         />
       </div>
 
-      <div className="cone-chart-footer">
-        <div className="cone-chart-info-pills">
-          <span className="cone-info-pill">BTC: <strong>{formatUsd(latestPrice)}</strong></span>
+      <div className="cone-chart-footer btc-multi-cone-footer">
+        <div className="cone-chart-info-pills btc-multi-cone-pills">
           {activeCones.map(({ idx, state, cfg }) => (
-            <span key={idx} className="cone-info-pill" style={{ borderColor: hexToRgba(cfg.color, 0.3), background: hexToRgba(cfg.color, 0.08) }}>
+            <span
+              key={idx}
+              className="cone-info-pill"
+              style={{
+                gridColumn: idx + 1,
+                borderColor: hexToRgba(cfg.color, 0.3),
+                background: hexToRgba(cfg.color, 0.08),
+              }}
+            >
               {cfg.label}: <strong>{formatUsd(state.prediction)}</strong> · conf <strong>{state.confidence.toFixed(0)}%</strong>
             </span>
           ))}
         </div>
-        <span className="cone-draw-hint">Click a future zone to create a cone. Drag center to move mean; drag edges to change confidence.</span>
       </div>
     </div>
   );
