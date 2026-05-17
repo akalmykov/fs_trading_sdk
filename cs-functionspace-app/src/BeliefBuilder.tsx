@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 
 /* ── Constants ── */
 const COLUMNS = 13;
@@ -9,6 +9,8 @@ const MAX_CONSENSUS_P = Math.max(...CONSENSUS_P);
 const CONSENSUS_MEAN = ROUND_VALUES.reduce((s, v, i) => s + v * CONSENSUS_P[i] / 100, 0);
 const TOTAL_BRICKS_MAX = 32;
 const GRID_H = 224;
+const COL_PITCH = 36;
+const COL_W = 34;
 const MIN_BRICK_H = 7;
 const MAX_BRICK_H = 24;
 
@@ -173,6 +175,13 @@ export function BeliefBuilder({ onBeliefChange }: BeliefBuilderProps) {
   const [bricks, setBricks] = useState<number[]>(new Array(COLUMNS).fill(0));
   const [hoverCol, setHoverCol] = useState<number | null>(null);
   const [hint, setHint] = useState(0);
+  const [fallingCols, setFallingCols] = useState<Set<number>>(new Set());
+  const [flashCols, setFlashCols] = useState<Record<number, string>>({});
+  const particleCanvasRef = useRef<HTMLCanvasElement>(null);
+  const particlesRef = useRef<Array<{ x: number; y: number; angle: number; speed: number; size: number; life: number; born: number; color: string }>>([]);
+  const animFrameRef = useRef<number | null>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
+  const reducedMotion = useRef(typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
 
   const totalBricks = bricks.reduce((a, b) => a + b, 0);
   const userP = useMemo(() => totalBricks > 0 ? bricks.map(b => b / totalBricks) : bricks.map(() => 0), [bricks, totalBricks]);
@@ -183,12 +192,86 @@ export function BeliefBuilder({ onBeliefChange }: BeliefBuilderProps) {
 
   useEffect(() => { if (onBeliefChange && totalBricks > 0) onBeliefChange(userP, userMean!, totalBricks); }, [userP, userMean, totalBricks]);
 
+  // Particle animation loop
+  const tickParticles = useCallback(() => {
+    const canvas = particleCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const now = performance.now();
+    particlesRef.current = particlesRef.current.filter(p => now - p.born < p.life);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    for (const p of particlesRef.current) {
+      const dt = (now - p.born) / 1000;
+      const x = p.x + Math.cos(p.angle) * p.speed * dt;
+      const y = p.y - Math.sin(p.angle) * p.speed * dt + 0.5 * 800 * dt * dt;
+      ctx.globalAlpha = Math.max(0, 1 - (now - p.born) / p.life);
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.arc(x, y, p.size, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    if (particlesRef.current.length > 0) {
+      animFrameRef.current = requestAnimationFrame(tickParticles);
+    } else {
+      animFrameRef.current = null;
+    }
+  }, []);
+
+  const spawnSparks = useCallback((col: number, count: number, color: string) => {
+    if (reducedMotion.current) return;
+    const canvas = particleCanvasRef.current;
+    const grid = gridRef.current;
+    if (!canvas || !grid) return;
+    const rect = grid.getBoundingClientRect();
+    canvas.width = rect.width;
+    canvas.height = rect.height;
+    const colX = col * (COL_PITCH) + COL_W / 2;
+    const brickH = getBrickH(count);
+    const stackH = count * brickH;
+    const landingY = GRID_H - stackH;
+    const sparkCount = Math.round(6 + (count - 1) / 31 * 8);
+    for (let i = 0; i < sparkCount; i++) {
+      particlesRef.current.push({
+        x: colX + (Math.random() - 0.5) * 20,
+        y: landingY,
+        angle: (30 + Math.random() * 120) * Math.PI / 180,
+        speed: 120 + Math.random() * 100,
+        size: 2.5 + Math.random() * 2,
+        life: 180 + Math.random() * 140,
+        born: performance.now(),
+        color,
+      });
+    }
+    if (!animFrameRef.current) animFrameRef.current = requestAnimationFrame(tickParticles);
+  }, [tickParticles]);
+
+  // Cleanup animation frame on unmount
+  useEffect(() => () => { if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current); }, []);
+
   const addBrick = useCallback((col: number) => {
     if (Math.floor(GRID_H / (bricks[col] + 1)) < MIN_BRICK_H || totalBricks >= TOTAL_BRICKS_MAX) return;
+    const newCount = bricks[col] + 1;
     setBricks(prev => { const n = [...prev]; n[col]++; return n; });
     if (totalBricks === 0) setHint(1);
     else if (totalBricks >= 7) setHint(2);
-  }, [bricks, totalBricks]);
+
+    if (!reducedMotion.current) {
+      // Trigger fall animation
+      setFallingCols(prev => new Set(prev).add(col));
+      setTimeout(() => setFallingCols(prev => { const n = new Set(prev); n.delete(col); return n; }), 220);
+
+      // Trigger column flash
+      const edgeRatio = (newCount > 0 && totalBricks + 1 > 0) ? (CONSENSUS_P[col] / 100) / (newCount / (totalBricks + 1)) : 1;
+      const color = getBrickColor(newCount, edgeRatio);
+      setFlashCols(prev => ({ ...prev, [col]: color }));
+      setTimeout(() => setFlashCols(prev => { const n = { ...prev }; delete n[col]; return n; }), 320);
+
+      // Spawn sparks at t=160ms
+      setTimeout(() => spawnSparks(col, newCount, color), 160);
+    }
+  }, [bricks, totalBricks, spawnSparks]);
 
   const removeBrick = useCallback((col: number) => {
     if (bricks[col] <= 0) return;
@@ -204,22 +287,26 @@ export function BeliefBuilder({ onBeliefChange }: BeliefBuilderProps) {
         {totalBricks > 0 && <button className="bb-reset" onClick={() => setBricks(new Array(COLUMNS).fill(0))}>Reset</button>}
       </div>
 
-      <div className="bb-grid" onMouseLeave={() => setHoverCol(null)}>
+      <div className="bb-grid" ref={gridRef} onMouseLeave={() => setHoverCol(null)}>
+        <canvas ref={particleCanvasRef} className="bb-particle-canvas" />
         {bricks.map((count, col) => {
           const consensusH = (CONSENSUS_P[col] / MAX_CONSENSUS_P) * GRID_H;
           const brickH = getBrickH(count);
           const isHovered = hoverCol === col;
           const canAdd = Math.floor(GRID_H / (count + 1)) >= MIN_BRICK_H && totalBricks < TOTAL_BRICKS_MAX;
+          const isFalling = fallingCols.has(col);
 
           return (
             <div key={col} className={`bb-col ${isHovered ? 'hovered' : ''}`} onMouseEnter={() => setHoverCol(col)} onClick={() => addBrick(col)}>
               <div className="bb-consensus-bar" style={{ height: consensusH }} />
+              {flashCols[col] && <div className="bb-col-flash" style={{ background: flashCols[col] }} />}
               <div className="bb-brick-stack">
                 {Array.from({ length: count }).map((_, i) => {
                   const edgeRatio = userP[col] > 0 ? (CONSENSUS_P[col] / 100) / userP[col] : 1;
                   const color = getBrickColor(count, edgeRatio);
+                  const isNewest = i === count - 1 && isFalling;
                   return (
-                    <div key={i} className="bb-brick"
+                    <div key={i} className={`bb-brick ${isNewest ? 'falling' : ''}`}
                       style={{ height: brickH, background: color, borderTop: `1.5px solid ${lighten(color, 0.12)}`, transition: 'height 180ms ease-in-out, background 180ms ease-in-out' }}
                       onClick={(e) => { e.stopPropagation(); removeBrick(col); }}
                     />
