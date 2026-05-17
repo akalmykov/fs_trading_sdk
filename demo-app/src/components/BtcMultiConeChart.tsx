@@ -190,14 +190,34 @@ function buildNeutralCone(latestPrice: number, lb: number, ub: number): ConeStat
   return { prediction: +clamp(latestPrice, lb, ub).toFixed(0), confidence: 50 };
 }
 
+function cubicBezier(t: number, p1x: number, p1y: number, p2x: number, p2y: number) {
+  const cx = 3 * p1x;
+  const bx = 3 * (p2x - p1x) - cx;
+  const ax = 1 - cx - bx;
+  const cy = 3 * p1y;
+  const by = 3 * (p2y - p1y) - cy;
+  const ay = 1 - cy - by;
+  let x = t;
+  for (let i = 0; i < 5; i += 1) {
+    const estimate = ((ax * x + bx) * x + cx) * x - t;
+    const slope = (3 * ax * x + 2 * bx) * x + cx;
+    if (Math.abs(slope) < 1e-4) break;
+    x = clamp(x - estimate / slope, 0, 1);
+  }
+  return ((ay * x + by) * x + cy) * x;
+}
+
 export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
   const historySeriesRef = useRef<ISeriesApi<'Line'> | null>(null);
   const drawingRef = useRef<{ zoneIdx: number; mode: DragMode } | null>(null);
+  const focusProgressRef = useRef(0);
+  const focusAnimationRef = useRef<number | null>(null);
 
   const [coneStates, setConeStates] = useState<Record<number, ConeState>>({});
+  const [activeZoneIdx, setActiveZoneIdx] = useState<number | null>(null);
   const [history, setHistory] = useState<PricePoint[]>(() => generateFallbackBtcHistory());
   const [historySource, setHistorySource] = useState<'loading' | 'coingecko' | 'binance' | 'cache' | 'fallback'>('loading');
   const [historyWarning, setHistoryWarning] = useState<string | null>(null);
@@ -332,8 +352,25 @@ export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
     ctx.fillText('Now', originX, 22);
     ctx.restore();
 
-    const latestY = priceSeries.priceToCoordinate(latestPrice);
-    if (latestY !== null) {
+    const focusProgress = focusProgressRef.current;
+    const hasFocus = activeZoneIdx !== null && focusProgress > 0.01;
+    const inactiveFactor = hasFocus ? 1 - (0.72 * focusProgress) : 1;
+    const dimAlpha = 0.62 * focusProgress;
+    const activeZoneLeft = activeZoneIdx === null
+      ? null
+      : originX + activeZoneIdx * zoneWidth;
+    const activeZoneRight = activeZoneIdx === null
+      ? null
+      : originX + (activeZoneIdx + 1) * zoneWidth;
+    const activeCfg = activeZoneIdx === null ? null : MARKETS[activeZoneIdx];
+
+    const alphaFor = (idx: number) => (
+      hasFocus && idx !== activeZoneIdx ? inactiveFactor : 1
+    );
+
+    const drawLatestPrice = () => {
+      const latestY = priceSeries.priceToCoordinate(latestPrice);
+      if (latestY === null) return;
       ctx.save();
       ctx.strokeStyle = 'rgba(34, 197, 94, 0.5)';
       ctx.setLineDash([4, 4]);
@@ -350,13 +387,12 @@ export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
       ctx.textAlign = 'left';
       ctx.fillText(formatUsd(latestPrice), originX + 8, latestY - 8);
       ctx.restore();
-    }
+    };
 
-    // User cones are intentionally drawn before PDFs/settlement markers.
-    for (let idx = MARKETS.length - 1; idx >= 0; idx -= 1) {
+    const drawCone = (idx: number) => {
       const state = coneStates[idx];
       const market = markets[idx];
-      if (!state || !market) continue;
+      if (!state || !market) return;
 
       const cfg = MARKETS[idx];
       const lb = market.config.lowerBound;
@@ -380,18 +416,24 @@ export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
         center.push({ x, y: centerY });
       }
 
-      if (upper.length < 2 || lower.length < 2 || center.length < 2) continue;
+      if (upper.length < 2 || lower.length < 2 || center.length < 2) return;
 
+      const layerAlpha = alphaFor(idx);
+      const isActive = hasFocus && idx === activeZoneIdx;
+      const lineOpacity = isActive
+        ? 0.6 + (0.4 * focusProgress)
+        : 0.6 * layerAlpha;
+      const lineWidth = isActive ? 1.5 + (0.5 * focusProgress) : 1.5;
       ctx.save();
       ctx.beginPath();
       upper.forEach((pt, i) => { if (i === 0) ctx.moveTo(pt.x, pt.y); else ctx.lineTo(pt.x, pt.y); });
       for (let i = lower.length - 1; i >= 0; i -= 1) ctx.lineTo(lower[i].x, lower[i].y);
       ctx.closePath();
-      ctx.fillStyle = hexToRgba(cfg.color, cfg.opacity);
+      ctx.fillStyle = hexToRgba(cfg.color, cfg.opacity * layerAlpha);
       ctx.fill();
 
-      ctx.strokeStyle = hexToRgba(cfg.color, 0.72);
-      ctx.lineWidth = 1.25;
+      ctx.strokeStyle = hexToRgba(cfg.color, lineOpacity);
+      ctx.lineWidth = lineWidth;
       ctx.setLineDash([5, 4]);
       ctx.beginPath();
       upper.forEach((pt, i) => { if (i === 0) ctx.moveTo(pt.x, pt.y); else ctx.lineTo(pt.x, pt.y); });
@@ -400,8 +442,8 @@ export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
       lower.forEach((pt, i) => { if (i === 0) ctx.moveTo(pt.x, pt.y); else ctx.lineTo(pt.x, pt.y); });
       ctx.stroke();
 
-      ctx.strokeStyle = hexToRgba(cfg.color, 0.95);
-      ctx.lineWidth = 2;
+      ctx.strokeStyle = hexToRgba(cfg.color, lineOpacity);
+      ctx.lineWidth = lineWidth;
       ctx.setLineDash([7, 5]);
       ctx.beginPath();
       center.forEach((pt, i) => { if (i === 0) ctx.moveTo(pt.x, pt.y); else ctx.lineTo(pt.x, pt.y); });
@@ -410,34 +452,36 @@ export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
 
       const centerY = priceSeries.priceToCoordinate(state.prediction);
       if (centerY !== null) {
-        ctx.fillStyle = cfg.color;
+        ctx.fillStyle = hexToRgba(cfg.color, isActive ? 1 : 0.85 * layerAlpha);
         ctx.beginPath();
         ctx.arc(settlementX, centerY, 4, 0, Math.PI * 2);
         ctx.fill();
       }
       ctx.restore();
-    }
+    };
 
-    for (let i = 0; i < MARKETS.length; i += 1) {
+    const drawSettlement = (i: number, includeLabel: boolean) => {
       const cfg = MARKETS[i];
       const market = markets[i]!;
       const consensus = consensuses[i];
       const x = settlementXForZone(i, rect.width);
+      const isActive = hasFocus && i === activeZoneIdx;
+      const layerAlpha = alphaFor(i);
 
       ctx.save();
-      ctx.strokeStyle = cfg.color;
-      ctx.lineWidth = 1.5;
-      ctx.setLineDash([4, 3]);
+      ctx.strokeStyle = hexToRgba(cfg.color, isActive ? 1 : 0.4 * layerAlpha);
+      ctx.lineWidth = 2;
+      ctx.setLineDash(isActive ? [] : [4, 3]);
+      if (isActive) {
+        ctx.shadowColor = hexToRgba(cfg.color, 0.3);
+        ctx.shadowBlur = 8;
+      }
       ctx.beginPath();
       ctx.moveTo(x, 28);
       ctx.lineTo(x, rect.height - 34);
       ctx.stroke();
+      ctx.shadowBlur = 0;
       ctx.setLineDash([]);
-
-      ctx.fillStyle = cfg.color;
-      ctx.font = '700 11px Inter, ui-sans-serif, system-ui, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(cfg.label, x, 22);
 
       const lbY = market.config.lowerBound >= visiblePriceRange.min && market.config.lowerBound <= visiblePriceRange.max
         ? priceSeries.priceToCoordinate(market.config.lowerBound)
@@ -445,7 +489,7 @@ export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
       const ubY = market.config.upperBound >= visiblePriceRange.min && market.config.upperBound <= visiblePriceRange.max
         ? priceSeries.priceToCoordinate(market.config.upperBound)
         : null;
-      ctx.strokeStyle = hexToRgba(cfg.color, 0.35);
+      ctx.strokeStyle = hexToRgba(cfg.color, 0.35 * layerAlpha);
       ctx.lineWidth = 1;
       ctx.setLineDash([2, 4]);
       if (lbY !== null) {
@@ -482,16 +526,138 @@ export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
           const ly = priceSeries.priceToCoordinate(last.x);
           if (ly !== null) ctx.lineTo(x, ly);
           ctx.closePath();
-          ctx.fillStyle = hexToRgba(cfg.color, 0.12);
+          const fillOpacity = isActive
+            ? 0.12 + (0.16 * focusProgress)
+            : 0.12 * layerAlpha;
+          const strokeOpacity = isActive
+            ? 0.5 + (0.35 * focusProgress)
+            : 0.5 * layerAlpha;
+          ctx.fillStyle = hexToRgba(cfg.color, fillOpacity);
           ctx.fill();
-          ctx.strokeStyle = hexToRgba(cfg.color, 0.5);
+          ctx.strokeStyle = hexToRgba(cfg.color, strokeOpacity);
           ctx.lineWidth = 1;
           ctx.stroke();
         }
       }
+      if (includeLabel) {
+        ctx.fillStyle = cfg.color;
+        ctx.font = '700 11px Inter, ui-sans-serif, system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(cfg.label, x, 22);
+      }
+      ctx.restore();
+    };
+
+    const drawSettlementRule = (i: number) => {
+      const cfg = MARKETS[i];
+      const x = settlementXForZone(i, rect.width);
+      ctx.save();
+      ctx.strokeStyle = hexToRgba(cfg.color, 0.35);
+      ctx.lineWidth = 2;
+      ctx.setLineDash([4, 3]);
+      ctx.beginPath();
+      ctx.moveTo(x, 28);
+      ctx.lineTo(x, rect.height - 34);
+      ctx.stroke();
+      ctx.restore();
+    };
+
+    for (let idx = MARKETS.length - 1; idx >= 0; idx -= 1) {
+      if (idx !== activeZoneIdx) drawCone(idx);
+    }
+    for (let idx = 0; idx < MARKETS.length; idx += 1) {
+      if (idx !== activeZoneIdx) drawSettlement(idx, false);
+    }
+
+    if (hasFocus && activeZoneLeft !== null && activeZoneRight !== null) {
+      const fade = 40;
+      ctx.save();
+      ctx.fillStyle = `rgba(10, 11, 15, ${dimAlpha})`;
+      ctx.fillRect(0, 0, Math.max(0, activeZoneLeft - fade), rect.height);
+
+      const leftFade = ctx.createLinearGradient(activeZoneLeft - fade, 0, activeZoneLeft, 0);
+      leftFade.addColorStop(0, `rgba(10, 11, 15, ${dimAlpha})`);
+      leftFade.addColorStop(1, 'rgba(10, 11, 15, 0)');
+      ctx.fillStyle = leftFade;
+      ctx.fillRect(activeZoneLeft - fade, 0, fade, rect.height);
+
+      const rightFade = ctx.createLinearGradient(activeZoneRight, 0, activeZoneRight + fade, 0);
+      rightFade.addColorStop(0, 'rgba(10, 11, 15, 0)');
+      rightFade.addColorStop(1, `rgba(10, 11, 15, ${dimAlpha})`);
+      ctx.fillStyle = rightFade;
+      ctx.fillRect(activeZoneRight, 0, fade, rect.height);
+
+      ctx.fillStyle = `rgba(10, 11, 15, ${dimAlpha})`;
+      ctx.fillRect(activeZoneRight + fade, 0, Math.max(0, rect.width - activeZoneRight - fade), rect.height);
+      ctx.restore();
+
+      if (activeCfg) {
+        ctx.save();
+        const glow = ctx.createRadialGradient(
+          (activeZoneLeft + activeZoneRight) / 2,
+          rect.height + 30,
+          0,
+          (activeZoneLeft + activeZoneRight) / 2,
+          rect.height + 30,
+          Math.max(zoneWidth * 0.75, 160),
+        );
+        glow.addColorStop(0, hexToRgba(activeCfg.color, 0.06 * focusProgress));
+        glow.addColorStop(1, hexToRgba(activeCfg.color, 0));
+        ctx.fillStyle = glow;
+        ctx.fillRect(activeZoneLeft, rect.height * 0.45, activeZoneRight - activeZoneLeft, rect.height * 0.55);
+        ctx.restore();
+      }
+    }
+
+    drawLatestPrice();
+    if (hasFocus) {
+      for (let idx = 0; idx < MARKETS.length; idx += 1) {
+        if (idx !== activeZoneIdx) drawSettlementRule(idx);
+      }
+    }
+    if (activeZoneIdx !== null) {
+      drawCone(activeZoneIdx);
+      drawSettlement(activeZoneIdx, false);
+    }
+    for (let idx = 0; idx < MARKETS.length; idx += 1) {
+      const cfg = MARKETS[idx];
+      const x = settlementXForZone(idx, rect.width);
+      ctx.save();
+      ctx.fillStyle = cfg.color;
+      ctx.font = '700 11px Inter, ui-sans-serif, system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(cfg.label, x, 22);
       ctx.restore();
     }
-  }, [allLoaded, coneStates, consensuses, latestPrice, markets, visiblePriceRange]);
+  }, [activeZoneIdx, allLoaded, coneStates, consensuses, latestPrice, markets, visiblePriceRange]);
+
+  useEffect(() => {
+    if (focusAnimationRef.current !== null) cancelAnimationFrame(focusAnimationRef.current);
+    const from = focusProgressRef.current;
+    const to = activeZoneIdx === null ? 0 : 1;
+    const duration = activeZoneIdx === null ? 180 : 280;
+    const easing = activeZoneIdx === null
+      ? (t: number) => cubicBezier(t, 0.4, 0, 1, 1)
+      : (t: number) => cubicBezier(t, 0.16, 1, 0.3, 1);
+    const start = performance.now();
+
+    const tick = (now: number) => {
+      const t = clamp((now - start) / duration, 0, 1);
+      focusProgressRef.current = from + (to - from) * easing(t);
+      drawOverlay();
+      if (t < 1) {
+        focusAnimationRef.current = requestAnimationFrame(tick);
+      } else {
+        focusAnimationRef.current = null;
+      }
+    };
+
+    focusAnimationRef.current = requestAnimationFrame(tick);
+    return () => {
+      if (focusAnimationRef.current !== null) cancelAnimationFrame(focusAnimationRef.current);
+      focusAnimationRef.current = null;
+    };
+  }, [activeZoneIdx, drawOverlay]);
 
   useEffect(() => {
     if (!containerRef.current || chartRef.current) return;
@@ -704,6 +870,7 @@ export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
     const zoneIdx = getZone(point.x, point.width);
     if (zoneIdx < 0 || !markets[zoneIdx]) return;
     e.preventDefault();
+    setActiveZoneIdx(zoneIdx);
 
     setConeStates(prev => {
       const market = markets[zoneIdx]!;
@@ -722,15 +889,25 @@ export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
 
   const handleStageMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const drawing = drawingRef.current;
-    if (!drawing) return;
     const point = getStagePoint(e);
     if (!point) return;
+    const hoveredZone = getZone(point.x, point.width);
+    if (!drawing) {
+      setActiveZoneIdx(hoveredZone >= 0 ? hoveredZone : null);
+      return;
+    }
     e.preventDefault();
+    setActiveZoneIdx(drawing.zoneIdx);
     applyDrag(drawing.zoneIdx, drawing.mode, point.x, point.y, point.width);
-  }, [applyDrag, getStagePoint]);
+  }, [applyDrag, getStagePoint, getZone]);
 
   const stopStageDrag = useCallback(() => {
     drawingRef.current = null;
+  }, []);
+
+  const handleStageMouseLeave = useCallback(() => {
+    drawingRef.current = null;
+    setActiveZoneIdx(null);
   }, []);
 
   const activeCones = Object.entries(coneStates)
@@ -767,7 +944,7 @@ export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
         onMouseDownCapture={handleStageMouseDown}
         onMouseMoveCapture={handleStageMouseMove}
         onMouseUpCapture={stopStageDrag}
-        onMouseLeave={stopStageDrag}
+        onMouseLeave={handleStageMouseLeave}
       >
         <div ref={containerRef} className="cone-chart-canvas-host" />
         <canvas ref={overlayCanvasRef} className="cone-chart-pdf-canvas" />
@@ -776,7 +953,7 @@ export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
           onMouseDown={handleStageMouseDown}
           onMouseMove={handleStageMouseMove}
           onMouseUp={stopStageDrag}
-          onMouseLeave={stopStageDrag}
+          onMouseLeave={handleStageMouseLeave}
           style={{ position: 'absolute', inset: 0, zIndex: 4, cursor: 'crosshair' }}
         />
       </div>
