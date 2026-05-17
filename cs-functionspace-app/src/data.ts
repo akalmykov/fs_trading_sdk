@@ -71,7 +71,7 @@ export const MOCK_MATCHES: Match[] = [
     startTime: '2026-05-19T14:00:00Z', isLive: false,
     teamA: { name: 'Natus Vincere', rank: 3, abbr: 'NAVI', logo: '/team_logos/NaVi_logo.svg' },
     teamB: { name: 'Team Spirit', rank: 4, abbr: 'SPR', logo: '/team_logos/Team_Spirit_new_em.svg' },
-    winProb: 55, markets: ['Map 1 Rounds', 'Map 2 Rounds', 'Map 3 Rounds', 'Series Score'],
+    winProb: 55, markets: ['Map 1 Rounds', 'Map 2 Rounds', 'Map 3 Rounds'],
     volume: 34500, liquidity: 28100, traders: 118, userHasPosition: true,
   },
 ];
