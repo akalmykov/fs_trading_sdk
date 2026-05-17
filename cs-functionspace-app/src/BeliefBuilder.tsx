@@ -14,10 +14,13 @@ const MAX_BRICK_H = 24;
 
 /* ── Color helpers ── */
 const COLOR_ANCHORS = [
-  { t: 0.00, hex: '#1c69d4' },  // 1 brick — BMW blue
-  { t: 0.33, hex: '#4a40c0' },  // ~11 bricks — mid indigo
-  { t: 0.66, hex: '#7828a0' },  // ~22 bricks — purple-red
-  { t: 1.00, hex: '#b91c1c' },  // 32 bricks — blood red
+  { t: 0.00, hex: '#1c69d4' },  //  1 brick  — BMW blue (hue ~214°)
+  { t: 0.09, hex: '#1c69d4' },  //  3 bricks — still blue
+  { t: 0.30, hex: '#8b3dc8' },  // 10 bricks — vivid purple
+  { t: 0.50, hex: '#e8105a' },  // 16 bricks — hot red-pink
+  { t: 0.70, hex: '#0ea5a0' },  // 22 bricks — deep cyan-teal
+  { t: 0.85, hex: '#0fb870' },  // 28 bricks — vivid teal-green
+  { t: 1.00, hex: '#16a34a' },  // 32 bricks — vivid green
 ];
 
 function hexToRgb(hex: string): [number, number, number] {
@@ -57,22 +60,82 @@ function adjustSaturation(hex: string, factor: number): string {
 }
 
 function lighten(hex: string, amount: number): string {
+  // Add lightness in HSL space
   const [r, g, b] = hexToRgb(hex);
-  return rgbToHex(r + (255 - r) * amount, g + (255 - g) * amount, b + (255 - b) * amount);
+  const rn = r / 255, gn = g / 255, bn = b / 255;
+  const max = Math.max(rn, gn, bn), min = Math.min(rn, gn, bn);
+  let l = (max + min) / 2;
+  let h = 0, s = 0;
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    if (max === rn) h = ((gn - bn) / d + (gn < bn ? 6 : 0)) / 6;
+    else if (max === gn) h = ((bn - rn) / d + 2) / 6;
+    else h = ((rn - gn) / d + 4) / 6;
+  }
+  l = Math.min(1, l + amount);
+  const hue2rgb = (p: number, q: number, t: number) => {
+    if (t < 0) t += 1; if (t > 1) t -= 1;
+    if (t < 1/6) return p + (q - p) * 6 * t;
+    if (t < 1/2) return q;
+    if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+    return p;
+  };
+  if (s === 0) return rgbToHex(l * 255, l * 255, l * 255);
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+  const p = 2 * l - q;
+  return rgbToHex(hue2rgb(p, q, h + 1/3) * 255, hue2rgb(p, q, h) * 255, hue2rgb(p, q, h - 1/3) * 255);
+}
+
+function hexToHsl(hex: string): [number, number, number] {
+  const [r, g, b] = hexToRgb(hex);
+  const rn = r / 255, gn = g / 255, bn = b / 255;
+  const max = Math.max(rn, gn, bn), min = Math.min(rn, gn, bn);
+  const l = (max + min) / 2;
+  let h = 0, s = 0;
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    if (max === rn) h = ((gn - bn) / d + (gn < bn ? 6 : 0)) / 6;
+    else if (max === gn) h = ((bn - rn) / d + 2) / 6;
+    else h = ((rn - gn) / d + 4) / 6;
+  }
+  return [h, s, l];
+}
+
+function hslToHex(h: number, s: number, l: number): string {
+  const hue2rgb = (p: number, q: number, t: number) => {
+    if (t < 0) t += 1; if (t > 1) t -= 1;
+    if (t < 1/6) return p + (q - p) * 6 * t;
+    if (t < 1/2) return q;
+    if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+    return p;
+  };
+  if (s === 0) return rgbToHex(l * 255, l * 255, l * 255);
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+  const p = 2 * l - q;
+  return rgbToHex(hue2rgb(p, q, h + 1/3) * 255, hue2rgb(p, q, h) * 255, hue2rgb(p, q, h - 1/3) * 255);
 }
 
 function getBrickColor(brickCount: number, edgeRatio: number): string {
   const t = Math.max(0, Math.min(1, (brickCount - 1) / 31));
-  // Find surrounding anchors
   let lo = COLOR_ANCHORS[0], hi = COLOR_ANCHORS[1];
   for (let i = 1; i < COLOR_ANCHORS.length; i++) {
     if (t <= COLOR_ANCHORS[i].t) { lo = COLOR_ANCHORS[i - 1]; hi = COLOR_ANCHORS[i]; break; }
     if (i === COLOR_ANCHORS.length - 1) { lo = COLOR_ANCHORS[i - 1]; hi = COLOR_ANCHORS[i]; }
   }
   const frac = hi.t === lo.t ? 1 : (t - lo.t) / (hi.t - lo.t);
-  const [r1, g1, b1] = hexToRgb(lo.hex);
-  const [r2, g2, b2] = hexToRgb(hi.hex);
-  const base = rgbToHex(r1 + (r2 - r1) * frac, g1 + (g2 - g1) * frac, b1 + (b2 - b1) * frac);
+  // Interpolate in HSL for clean hue rotation
+  const [h1, s1, l1] = hexToHsl(lo.hex);
+  const [h2, s2, l2] = hexToHsl(hi.hex);
+  // Shortest hue path
+  let dh = h2 - h1;
+  if (dh > 0.5) dh -= 1;
+  if (dh < -0.5) dh += 1;
+  const h = ((h1 + dh * frac) % 1 + 1) % 1;
+  const s = s1 + (s2 - s1) * frac;
+  const l = l1 + (l2 - l1) * frac;
+  const base = hslToHex(h, s, l);
 
   let satMod = 1.0;
   if (edgeRatio < 0.5) satMod = 0.45;
@@ -157,7 +220,7 @@ export function BeliefBuilder({ onBeliefChange }: BeliefBuilderProps) {
                   const color = getBrickColor(count, edgeRatio);
                   return (
                     <div key={i} className="bb-brick"
-                      style={{ height: brickH, background: color, borderTop: `1.5px solid ${lighten(color, 0.15)}`, transition: 'height 180ms ease-in-out, background 180ms ease-in-out' }}
+                      style={{ height: brickH, background: color, borderTop: `1.5px solid ${lighten(color, 0.12)}`, transition: 'height 180ms ease-in-out, background 180ms ease-in-out' }}
                       onClick={(e) => { e.stopPropagation(); removeBrick(col); }}
                     />
                   );
