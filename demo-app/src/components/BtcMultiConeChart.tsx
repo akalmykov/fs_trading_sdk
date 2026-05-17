@@ -594,6 +594,41 @@ export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
       ctx.restore();
     };
 
+    const drawIdleConsensusPdf = (i: number) => {
+      const consensus = consensuses[i];
+      if (!consensus?.points?.length) return;
+      const cfg = MARKETS[i];
+      const x = settlementXForZone(i, rect.width);
+      const points = consensus.points.filter(pt => Number.isFinite(pt.x) && Number.isFinite(pt.y));
+      const maxDensity = Math.max(...points.map(pt => pt.y));
+      if (maxDensity <= 0) return;
+
+      ctx.save();
+      ctx.beginPath();
+      let started = false;
+      for (const pt of points) {
+        const py = priceSeries.priceToCoordinate(pt.x);
+        if (py === null || !Number.isFinite(py)) continue;
+        const px = Math.max(0, x - (pt.y / maxDensity) * PDF_MAX_WIDTH);
+        if (!started) {
+          ctx.moveTo(x, py);
+          started = true;
+        } else {
+          ctx.lineTo(px, py);
+        }
+      }
+      const last = points[points.length - 1];
+      const lastY = priceSeries.priceToCoordinate(last.x);
+      if (lastY !== null) ctx.lineTo(x, lastY);
+      ctx.closePath();
+      ctx.fillStyle = hexToRgba(cfg.color, 0.06);
+      ctx.fill();
+      ctx.strokeStyle = hexToRgba(cfg.color, 0.25);
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.restore();
+    };
+
     const drawIdleCorridors = () => {
       const anchors = Object.entries(coneStates)
         .map(([idx, state]) => {
@@ -704,6 +739,9 @@ export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
     };
 
     if (!hasFocus) {
+      for (let idx = 0; idx < MARKETS.length; idx += 1) {
+        drawIdleConsensusPdf(idx);
+      }
       drawIdleCorridors();
       drawLatestPrice();
       for (let idx = 0; idx < MARKETS.length; idx += 1) {
