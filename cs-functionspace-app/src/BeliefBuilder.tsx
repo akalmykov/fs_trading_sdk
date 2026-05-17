@@ -35,10 +35,10 @@ function bricksToRegions(bricks: number[]): Region[] {
   const total = bricks.reduce((a, b) => a + b, 0);
   if (total === 0) return [];
   const regions: Region[] = [];
+  const spread = (UPPER_BOUND - LOWER_BOUND) * 0.06;
   for (let col = 0; col < bricks.length; col++) {
     if (bricks[col] === 0) continue;
     const center = LOWER_BOUND + (col / (bricks.length - 1)) * (UPPER_BOUND - LOWER_BOUND);
-    const spread = MAX_SPREAD / (1 + bricks[col] * 0.5);
     regions.push({ type: 'point', center, spread, weight: bricks[col] });
   }
   return regions;
@@ -205,37 +205,17 @@ export function BeliefBuilder({ onBeliefChange }: BeliefBuilderProps) {
   const totalBricks = bricks.reduce((a, b) => a + b, 0);
   const userP = useMemo(() => totalBricks > 0 ? bricks.map(b => b / totalBricks) : bricks.map(() => 0), [bricks, totalBricks]);
 
-  // Build belief vector from the smooth curve
+  // Build belief vector from the smooth curve (for submission/display)
   const beliefVector = useMemo(() => {
     if (totalBricks === 0) return null;
     return generateBelief(bricksToRegions(bricks), NUM_BUCKETS, LOWER_BOUND, UPPER_BOUND);
   }, [bricks, totalBricks]);
 
-  // Build consensus as a belief vector (same shape as market would have)
-  const consensusVector = useMemo(() => {
-    const regions: Region[] = ROUND_VALUES.map((v, i) => ({
-      type: 'point' as const,
-      center: v,
-      spread: (UPPER_BOUND - LOWER_BOUND) * 0.06,
-      weight: CONSENSUS_P[i],
-    }));
-    return generateBelief(regions, NUM_BUCKETS, LOWER_BOUND, UPPER_BOUND);
-  }, []);
-
-  // Compute payout multipliers per column by sampling belief/consensus at column positions
-  const multipliers = useMemo(() => {
-    if (!beliefVector) return new Array(COLUMNS).fill(null);
-    return ROUND_VALUES.map((v) => {
-      // Map column center to bucket index
-      const u = (v - LOWER_BOUND) / (UPPER_BOUND - LOWER_BOUND);
-      const idx = Math.round(u * (NUM_BUCKETS + 1));
-      const b = beliefVector[idx] || 0;
-      const c = consensusVector[idx] || 0.001;
-      if (b < 0.001) return null;
-      const mult = b / c;
-      return mult < 0.05 ? null : mult;
-    });
-  }, [beliefVector, consensusVector]);
+  // Discrete multiplier: userP[col] / consensusP[col]
+  const BASE_STAKE = 100;
+  const stake = BASE_STAKE * (totalBricks / TOTAL_BRICKS_MAX);
+  const multipliers = useMemo(() => userP.map((p, i) => p > 0 ? p / (CONSENSUS_P[i] / 100) : null), [userP]);
+  const returnIfWin = useMemo(() => multipliers.map((m, i) => m !== null ? stake * userP[i] * m : null), [multipliers, stake, userP]);
   const userMean = useMemo(() => totalBricks > 0 ? ROUND_VALUES.reduce((s, v, i) => s + v * userP[i], 0) : null, [userP, totalBricks]);
   const edge = userMean !== null ? userMean - CONSENSUS_MEAN : null;
   const pUnder235 = useMemo(() => totalBricks > 0 ? userP.slice(0, 11).reduce((s, p) => s + p, 0) * 100 : null, [userP, totalBricks]);
@@ -451,10 +431,20 @@ export function BeliefBuilder({ onBeliefChange }: BeliefBuilderProps) {
       <div className="bb-multipliers">
         {multipliers.map((m, i) => (
           <div key={i} className="bb-mult" style={{ color: m !== null ? getMultiplierColor(m) : '#9a9a9a' }}>
-            {m !== null ? `${Math.min(m, 9.9).toFixed(1)}×` : '—'}
+            {m !== null ? `${Math.min(m, 99).toFixed(1)}×` : '—'}
           </div>
         ))}
       </div>
+
+      {totalBricks > 0 && (
+        <div className="bb-returns">
+          {returnIfWin.map((r, i) => (
+            <div key={i} className="bb-return">
+              {r !== null ? `$${r >= 100 ? r.toFixed(0) : r.toFixed(1)}` : '—'}
+            </div>
+          ))}
+        </div>
+      )}
 
       {totalBricks > 0 && <div className="bb-inference">Your implied P(under 23.5): {pUnder235!.toFixed(0)}% · Your mean: {userMean!.toFixed(1)} rounds</div>}
 
