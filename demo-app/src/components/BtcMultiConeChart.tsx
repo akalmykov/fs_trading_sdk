@@ -594,6 +594,66 @@ export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
       ctx.restore();
     };
 
+    const drawPriceLabels = (idx: number) => {
+      const state = coneStates[idx];
+      const market = markets[idx];
+      if (!state || !market) return;
+      const cfg = MARKETS[idx];
+      const sigma = confidenceToStdDev(
+        state.confidence,
+        market.config.lowerBound,
+        market.config.upperBound,
+      );
+      const halfWidth = sigma * P10_P90_Z;
+      const p90 = Math.min(market.config.upperBound, state.prediction + halfWidth);
+      const p10 = Math.max(market.config.lowerBound, state.prediction - halfWidth);
+      const x = settlementXForZone(idx, rect.width);
+      const labelX = Math.min(rect.width - PRICE_SCALE_WIDTH - 6, x + 8);
+      const meanY = priceSeries.priceToCoordinate(state.prediction);
+      const p90Y = priceSeries.priceToCoordinate(p90);
+      const p10Y = priceSeries.priceToCoordinate(p10);
+      if (meanY === null || p90Y === null || p10Y === null) return;
+
+      const isActive = hasFocus && idx === activeZoneIdx;
+      const isDimmed = hasFocus && idx !== activeZoneIdx;
+      const meanAlpha = isActive ? 1 : isDimmed ? 0.2 : 0.85;
+      const edgeAlpha = isActive ? 0.85 : isDimmed ? 0.2 : 0.55;
+      const edgeFontSize = isActive ? 12 : 11;
+
+      ctx.save();
+      ctx.textBaseline = 'middle';
+      ctx.textAlign = 'left';
+
+      if (isActive) {
+        const text = formatUsd(state.prediction);
+        ctx.font = '700 13px Inter, ui-sans-serif, system-ui, sans-serif';
+        const metrics = ctx.measureText(text);
+        ctx.fillStyle = 'rgba(7, 11, 18, 0.84)';
+        ctx.strokeStyle = hexToRgba(cfg.color, 0.45);
+        ctx.lineWidth = 1;
+        const pillX = labelX - 5;
+        const pillY = meanY - 11;
+        const pillW = metrics.width + 10;
+        const pillH = 22;
+        ctx.beginPath();
+        ctx.roundRect(pillX, pillY, pillW, pillH, 5);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = `rgba(255,255,255,${meanAlpha})`;
+        ctx.fillText(text, labelX, meanY);
+      } else {
+        ctx.font = '600 13px Inter, ui-sans-serif, system-ui, sans-serif';
+        ctx.fillStyle = `rgba(255,255,255,${meanAlpha})`;
+        ctx.fillText(formatUsd(state.prediction), labelX, meanY);
+      }
+
+      ctx.font = `400 ${edgeFontSize}px Inter, ui-sans-serif, system-ui, sans-serif`;
+      ctx.fillStyle = hexToRgba(cfg.color, edgeAlpha);
+      ctx.fillText(formatUsd(p90), labelX, p90Y);
+      ctx.fillText(formatUsd(p10), labelX, p10Y);
+      ctx.restore();
+    };
+
     const drawIdleConsensusPdf = (i: number) => {
       const consensus = consensuses[i];
       if (!consensus?.points?.length) return;
@@ -757,6 +817,9 @@ export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
         ctx.fillText(cfg.label, x, 22);
         ctx.restore();
       }
+      for (let idx = 0; idx < MARKETS.length; idx += 1) {
+        drawPriceLabels(idx);
+      }
       return;
     }
 
@@ -826,6 +889,9 @@ export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
       ctx.textAlign = 'center';
       ctx.fillText(cfg.label, x, 22);
       ctx.restore();
+    }
+    for (let idx = 0; idx < MARKETS.length; idx += 1) {
+      drawPriceLabels(idx);
     }
   }, [activeZoneIdx, allLoaded, coneStates, consensuses, getConeOrigin, latestPrice, markets, visiblePriceRange]);
 
