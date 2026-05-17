@@ -92,8 +92,25 @@ body {
 .cone-chart-pdf-canvas {
   position: absolute;
   inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
   pointer-events: none;
   z-index: 3;
+}
+
+.btc-multi-cone-card,
+.btc-multi-cone-card .cone-chart-stage,
+.btc-multi-cone-card .cone-chart-canvas-host,
+.btc-multi-cone-card .cone-chart-canvas-host > div,
+.btc-multi-cone-card .cone-chart-canvas-host table,
+.btc-multi-cone-card .cone-chart-canvas-host canvas {
+  background-color: #070b12 !important;
+}
+
+.btc-multi-cone-hit-layer {
+  background: transparent;
+  pointer-events: auto;
 }
 
 /* ── Settlement line ── */
