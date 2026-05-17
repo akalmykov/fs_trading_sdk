@@ -5,6 +5,7 @@ import { config, widgetTheme } from './App';
 import { BtcMultiTermHeatmap } from './components/BtcMultiTermHeatmap';
 import { BtcMultiConeChart } from './components/BtcMultiConeChart';
 import { SpMultiTermHeatmap } from './components/SpMultiTermHeatmap';
+import { MultiMarketPositionTable } from './components/MultiMarketPositionTable';
 
 // -- Swap trading layout by changing this import --
 import { BasicTradingLayout as TradingLayout } from './App_BasicTradingLayout';
@@ -272,6 +273,18 @@ export default function App_MarketOverlay() {
             </div>
             <div className="fs-overlay-body">
               <BtcMultiConeChart />
+              <div style={{ marginTop: '1rem' }}>
+                <MultiMarketPositionTable
+                  firstColumnLabel="Year"
+                  markets={[
+                    { id: 250, label: '2026' },
+                    { id: 251, label: '2027' },
+                    { id: 252, label: '2028' },
+                    { id: 253, label: '2029' },
+                    { id: 254, label: '2030' },
+                  ]}
+                />
+              </div>
             </div>
           </div>
         </div>

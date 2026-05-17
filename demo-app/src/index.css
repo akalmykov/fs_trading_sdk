@@ -247,6 +247,51 @@ body {
   margin-right: 0.75rem;
 }
 
+.btc-multi-cone-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.btc-multi-cone-auth-widget > .fs-passwordless-auth,
+.btc-multi-cone-auth-widget > .fs-passwordless-auth > .fs-auth-user-bar,
+.btc-multi-cone-auth-widget > .fs-passwordless-auth > .fs-auth-actions {
+  margin: 0;
+}
+
+.btc-multi-cone-auth-widget > .fs-passwordless-auth {
+  height: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.btc-multi-cone-auth-widget > .fs-passwordless-auth > .fs-auth-user-bar,
+.btc-multi-cone-auth-widget > .fs-passwordless-auth > .fs-auth-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem !important;
+  flex-wrap: nowrap;
+}
+
+.btc-multi-cone-auth-widget > .fs-passwordless-auth > .fs-auth-actions > span,
+.btc-multi-cone-auth-widget > .fs-passwordless-auth > .fs-auth-user-bar > .fs-auth-wallet,
+.btc-multi-cone-auth-widget > .fs-passwordless-auth > .fs-auth-user-bar > .fs-auth-username {
+  display: none;
+}
+
+.btc-multi-cone-auth-widget > .fs-passwordless-auth > .fs-auth-actions > .fs-auth-btn,
+.btc-multi-cone-auth-widget > .fs-passwordless-auth > .fs-auth-user-bar > .fs-auth-signout-btn {
+  flex: 0 0 auto;
+  min-height: 34px;
+  padding: 0.45rem 0.75rem;
+  border-radius: 7px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 .btc-multi-cone-submit-btn {
   display: inline-flex;
   align-items: center;

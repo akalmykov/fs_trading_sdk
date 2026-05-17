@@ -9,6 +9,7 @@ import {
 } from 'lightweight-charts';
 import { generateGaussian } from '@functionspace/core';
 import { useMarket, useConsensus, useAuth, useBuy } from '@functionspace/react';
+import { PasswordlessAuthWidget } from '@functionspace/ui';
 
 type PricePoint = { time: string; value: number };
 type ConeState = { prediction: number; confidence: number };
@@ -31,7 +32,9 @@ const PDF_MAX_WIDTH = 60;
 const PRICE_SCALE_WIDTH = 96;
 const P10_P90_Z = 1.2815515655446004;
 const DEFAULT_STAKE = 50;
+const MIN_STAKE = 0.01;
 const MAX_STAKE = 10_000;
+const STAKE_DECIMAL_PLACES = 2;
 const HEADER_ACTION_PORTAL_ID = 'btc-multi-cone-header-action';
 
 function clamp(v: number, lo: number, hi: number) {
@@ -79,12 +82,34 @@ function formatUsd(value: number) {
 }
 
 function formatStake(value: number) {
-  return `$${Math.round(value).toLocaleString('en-US')}`;
+  return `$${value.toLocaleString('en-US', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: STAKE_DECIMAL_PLACES,
+  })}`;
 }
 
 function stakeFromBuffer(buffer: string) {
-  const value = Number.parseInt(buffer, 10);
+  const value = Number.parseFloat(buffer);
   return Number.isFinite(value) ? value : 0;
+}
+
+function normalizeStakeValue(value: number) {
+  const multiplier = 10 ** STAKE_DECIMAL_PLACES;
+  return Math.round(value * multiplier) / multiplier;
+}
+
+function appendStakeInput(buffer: string, key: string) {
+  if (key === '.') {
+    if (buffer.includes('.')) return buffer;
+    return buffer.length === 0 ? '0.' : `${buffer}.`;
+  }
+
+  const nextBuffer = `${buffer}${key}`;
+  const [rawWhole, rawFraction = ''] = nextBuffer.split('.');
+  if (rawFraction.length > STAKE_DECIMAL_PLACES) return buffer;
+
+  const whole = rawWhole.replace(/^0+(?=\d)/, '') || '0';
+  return nextBuffer.includes('.') ? `${whole}.${rawFraction}` : whole;
 }
 
 function densityMedian(points: { x: number; y: number }[]) {
@@ -1326,13 +1351,13 @@ export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
   const confirmStakeEdit = useCallback((advance = false) => {
     if (!stakeEditor) return;
     const nextValue = stakeFromBuffer(stakeEditor.buffer);
-    if (nextValue < 1) {
+    if (nextValue < MIN_STAKE) {
       triggerStakeShake(stakeEditor.idx);
       setStakeEditor(null);
       return;
     }
 
-    const cappedValue = Math.min(nextValue, MAX_STAKE);
+    const cappedValue = normalizeStakeValue(Math.min(nextValue, MAX_STAKE));
     setStakesByYear(prev => ({ ...prev, [stakeEditor.idx]: cappedValue }));
     lastConfirmedStakeRef.current = cappedValue;
     if (cappedValue !== stakeEditor.original) triggerStakePulse(stakeEditor.idx);
@@ -1353,11 +1378,11 @@ export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
     if (!stakeEditor) return undefined;
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (/^\d$/.test(event.key)) {
+      if (/^\d$/.test(event.key) || event.key === '.') {
         event.preventDefault();
         setStakeEditor(current => {
           if (!current) return current;
-          const nextBuffer = `${current.buffer}${event.key}`.replace(/^0+(?=\d)/, '');
+          const nextBuffer = appendStakeInput(current.buffer, event.key);
           const nextValue = stakeFromBuffer(nextBuffer);
           if (nextValue > MAX_STAKE) return current;
           return { ...current, buffer: nextBuffer };
@@ -1542,10 +1567,10 @@ export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
       ? 'Bets placed'
       : submitStatus === 'error'
         ? 'Retry - error placing bets'
-        : !isAuthenticated
-          ? 'Sign in to submit bets'
-          : activeCones.length === 0
-            ? 'Draw a cone to submit'
+        : activeCones.length === 0
+          ? 'Submit all bets'
+          : !isAuthenticated
+            ? 'Sign in to submit bets'
             : `Submit All ${formatStake(totalStake)} Bets`;
 
   const submitButton = (
@@ -1587,7 +1612,15 @@ export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
 
   return (
     <>
-    {headerActionTarget && createPortal(submitButton, headerActionTarget)}
+    {headerActionTarget && createPortal(
+      <div className="btc-multi-cone-header-actions">
+        <div className="btc-multi-cone-auth-widget">
+          <PasswordlessAuthWidget />
+        </div>
+        {submitButton}
+      </div>,
+      headerActionTarget,
+    )}
     <div className="cone-chart-card btc-multi-cone-card" style={{ height: visibleHeight }}>
       <div
         className="cone-chart-stage"

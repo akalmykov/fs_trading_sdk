@@ -7,7 +7,13 @@ interface MarketDef {
   label: string;
 }
 
-export function MultiMarketPositionTable({ markets }: { markets: MarketDef[] }) {
+export function MultiMarketPositionTable({
+  markets,
+  firstColumnLabel = 'Market',
+}: {
+  markets: MarketDef[];
+  firstColumnLabel?: string;
+}) {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<'open' | 'history'>('open');
 
@@ -74,7 +80,7 @@ export function MultiMarketPositionTable({ markets }: { markets: MarketDef[] }) 
           <table className="fs-table">
             <thead>
               <tr>
-                <th>Market</th>
+                <th>{firstColumnLabel}</th>
                 <th>ID</th>
                 <th>Cost</th>
                 <th>Claims</th>
