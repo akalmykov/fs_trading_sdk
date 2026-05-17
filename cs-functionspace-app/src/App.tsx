@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { MOCK_MATCHES, type Match } from './data';
+import { BettingPanel } from './BettingPanel';
 import './index.css';
 
 function formatNum(n: number) { return n >= 1000 ? `${(n / 1000).toFixed(1)}K` : n.toString(); }
@@ -66,7 +67,7 @@ function FilterStrip({ search, setSearch, statusFilter, setStatusFilter, myBets,
 }
 
 /* ── MatchCard ── */
-function MatchCard({ match }: { match: Match }) {
+function MatchCard({ match, onBet }: { match: Match; onBet: (m: Match) => void }) {
   const favored = match.winProb >= 50;
   const prob = favored ? match.winProb : 100 - match.winProb;
 
@@ -135,7 +136,7 @@ function MatchCard({ match }: { match: Match }) {
         <span><span className="stat-label">Vol: </span><span className="stat-value">{formatNum(match.volume)}</span></span>
         <span><span className="stat-label">Liq: </span><span className="stat-value">{formatNum(match.liquidity)}</span></span>
         <span><span className="stat-label">Traders: </span><span className="stat-value">{match.traders}</span></span>
-        <button className="bet-btn">Bet →</button>
+        <button className="bet-btn" onClick={() => onBet(match)}>Bet →</button>
       </div>
     </div>
   );
@@ -146,6 +147,7 @@ export default function App() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('live+upcoming');
   const [myBets, setMyBets] = useState(false);
+  const [bettingMatch, setBettingMatch] = useState<Match | null>(null);
 
   const filtered = useMemo(() => {
     let matches = MOCK_MATCHES;
@@ -186,7 +188,7 @@ export default function App() {
           <span className="section-count">({liveMatches.length})</span>
         </div>
         {liveMatches.length === 0 && <p style={{ color: 'var(--muted-soft)', fontSize: 12, marginBottom: 16 }}>No live matches right now</p>}
-        {liveMatches.map(m => <MatchCard key={m.id} match={m} />)}
+        {liveMatches.map(m => <MatchCard key={m.id} match={m} onBet={setBettingMatch} />)}
 
         {/* Upcoming sections by date */}
         {Object.entries(upcomingByDate).map(([label, matches]) => (
@@ -195,7 +197,7 @@ export default function App() {
               {label}
               <span className="section-count">({matches.length})</span>
             </div>
-            {matches.map(m => <MatchCard key={m.id} match={m} />)}
+            {matches.map(m => <MatchCard key={m.id} match={m} onBet={setBettingMatch} />)}
           </div>
         ))}
 
@@ -205,6 +207,8 @@ export default function App() {
           </p>
         )}
       </div>
+
+      {bettingMatch && <BettingPanel match={bettingMatch} onClose={() => setBettingMatch(null)} />}
     </>
   );
 }

@@ -1314,6 +1314,18 @@ export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
     setActiveZoneIdx(null);
   }, []);
 
+  const clearCone = useCallback((idx: number) => {
+    drawingRef.current = null;
+    setCursorTip(null);
+    setActiveZoneIdx(current => (current === idx ? null : current));
+    setConeStates(prev => {
+      if (!prev[idx]) return prev;
+      const next = { ...prev };
+      delete next[idx];
+      return next;
+    });
+  }, []);
+
   const activeCones = Object.entries(coneStates)
     .map(([idx, state]) => ({ idx: Number(idx), state, cfg: MARKETS[Number(idx)] }))
     .sort((a, b) => a.idx - b.idx);
@@ -1353,6 +1365,38 @@ export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
           onMouseLeave={handleStageMouseLeave}
           style={{ position: 'absolute', inset: 0, zIndex: 4, cursor: 'crosshair' }}
         />
+        {activeCones.map(({ idx, cfg }) => {
+          const r = (idx + 1) / MARKETS.length;
+          const leftOffset = 52 - 148 * r;
+          return (
+            <button
+              key={`clear-${idx}`}
+              type="button"
+              className="btc-multi-cone-clear-btn"
+              style={{
+                left: `calc(${(r * 100).toFixed(4)}% + ${leftOffset.toFixed(2)}px)`,
+                color: cfg.color,
+                borderColor: hexToRgba(cfg.color, 0.32),
+                background: hexToRgba(cfg.color, 0.08),
+              }}
+              aria-label={`Clear ${cfg.label} belief cone`}
+              title={`Clear ${cfg.label} belief cone`}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+              }}
+              onMouseMove={(e) => {
+                e.stopPropagation();
+                setCursorTip(null);
+              }}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                clearCone(idx);
+              }}
+            />
+          );
+        })}
         {cursorTip && (
           <div
             className="btc-multi-cone-cursor-tip"
