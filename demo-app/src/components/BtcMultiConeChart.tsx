@@ -733,6 +733,7 @@ export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
         const skipped = Math.max(0, right.index - left.index - 1);
         const top: { x: number; y: number }[] = [];
         const bottom: { x: number; y: number }[] = [];
+        const medianLine: { x: number; y: number }[] = [];
         const steps = 72;
 
         for (let step = 0; step <= steps; step += 1) {
@@ -746,17 +747,19 @@ export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
           const half = baseHalf * uncertainty;
           const x = left.x + (right.x - left.x) * smooth;
           const topY = priceSeries.priceToCoordinate(median + half);
+          const medianY = priceSeries.priceToCoordinate(median);
           const bottomY = priceSeries.priceToCoordinate(median - half);
-          if (topY === null || bottomY === null) continue;
+          if (topY === null || medianY === null || bottomY === null) continue;
           top.push({ x, y: topY });
+          medianLine.push({ x, y: medianY });
           bottom.push({ x, y: bottomY });
         }
 
-        if (top.length < 2 || bottom.length < 2) continue;
+        if (top.length < 2 || medianLine.length < 2 || bottom.length < 2) continue;
 
         const gradient = ctx.createLinearGradient(left.x, 0, right.x, 0);
-        gradient.addColorStop(0, hexToRgba(left.color, 0.1));
-        gradient.addColorStop(1, hexToRgba(right.color, 0.1));
+        gradient.addColorStop(0, hexToRgba(left.color, 0.18));
+        gradient.addColorStop(1, hexToRgba(right.color, 0.18));
 
         ctx.save();
         ctx.beginPath();
@@ -771,11 +774,11 @@ export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
         ctx.fillStyle = gradient;
         ctx.fill();
 
-        ctx.lineWidth = 1.2;
+        ctx.lineWidth = 2;
         ctx.setLineDash([]);
         const topStroke = ctx.createLinearGradient(left.x, 0, right.x, 0);
-        topStroke.addColorStop(0, hexToRgba(left.color, 0.35));
-        topStroke.addColorStop(1, hexToRgba(right.color, 0.35));
+        topStroke.addColorStop(0, hexToRgba(left.color, 0.5));
+        topStroke.addColorStop(1, hexToRgba(right.color, 0.5));
         ctx.strokeStyle = topStroke;
         ctx.beginPath();
         top.forEach((pt, pointIdx) => {
@@ -785,14 +788,42 @@ export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
         ctx.stroke();
 
         const bottomStroke = ctx.createLinearGradient(left.x, 0, right.x, 0);
-        bottomStroke.addColorStop(0, hexToRgba(left.color, 0.35));
-        bottomStroke.addColorStop(1, hexToRgba(right.color, 0.35));
+        bottomStroke.addColorStop(0, hexToRgba(left.color, 0.5));
+        bottomStroke.addColorStop(1, hexToRgba(right.color, 0.5));
         ctx.strokeStyle = bottomStroke;
         ctx.beginPath();
         bottom.forEach((pt, pointIdx) => {
           if (pointIdx === 0) ctx.moveTo(pt.x, pt.y);
           else ctx.lineTo(pt.x, pt.y);
         });
+        ctx.stroke();
+
+        const medianStroke = ctx.createLinearGradient(left.x, 0, right.x, 0);
+        medianStroke.addColorStop(0, hexToRgba(left.color, 0.8));
+        medianStroke.addColorStop(1, hexToRgba(right.color, 0.8));
+        ctx.strokeStyle = medianStroke;
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([5, 5]);
+        ctx.beginPath();
+        medianLine.forEach((pt, pointIdx) => {
+          if (pointIdx === 0) ctx.moveTo(pt.x, pt.y);
+          else ctx.lineTo(pt.x, pt.y);
+        });
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.restore();
+      }
+
+      for (const anchor of anchors) {
+        const y = priceSeries.priceToCoordinate(anchor.median);
+        if (y === null) continue;
+        ctx.save();
+        ctx.fillStyle = hexToRgba(anchor.color, 0.92);
+        ctx.strokeStyle = 'rgba(255,255,255,0.82)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(anchor.x, y, 5, 0, Math.PI * 2);
+        ctx.fill();
         ctx.stroke();
         ctx.restore();
       }
