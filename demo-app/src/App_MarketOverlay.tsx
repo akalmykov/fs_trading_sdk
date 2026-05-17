@@ -267,6 +267,7 @@ export default function App_MarketOverlay() {
           <div className="fs-overlay-panel" style={{ maxWidth: 'min(1480px, 96vw)' }} onClick={(e) => e.stopPropagation()}>
             <div className="fs-overlay-header">
               <h2 className="fs-overlay-title">Bitcoin Multi-Term Annual Closing Price #2</h2>
+              <div id="btc-multi-cone-header-action" className="btc-multi-cone-header-action" />
               <button className="fs-overlay-close" onClick={() => setMultiConeOpen(false)} aria-label="Close">×</button>
             </div>
             <div className="fs-overlay-body">

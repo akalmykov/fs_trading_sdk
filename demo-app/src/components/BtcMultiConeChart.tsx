@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   ColorType,
   createChart,
@@ -6,12 +7,15 @@ import {
   type IChartApi,
   type ISeriesApi,
 } from 'lightweight-charts';
-import { useMarket, useConsensus } from '@functionspace/react';
+import { generateGaussian } from '@functionspace/core';
+import { useMarket, useConsensus, useAuth, useBuy } from '@functionspace/react';
 
 type PricePoint = { time: string; value: number };
 type ConeState = { prediction: number; confidence: number };
 type DragMode = 'mean' | 'upper' | 'lower';
 type CursorTip = { x: number; y: number } | null;
+type StakeEditor = { idx: number; buffer: string; original: number } | null;
+type SubmitStatus = 'idle' | 'loading' | 'success' | 'error';
 
 const MARKETS = [
   { id: 250, year: 2026, settlement: '2026-12-31', color: '#14b8a6', label: '2026', opacity: 0.12 },
@@ -26,6 +30,9 @@ const BTC_HISTORY_TTL_MS = 12 * 60 * 60 * 1000;
 const PDF_MAX_WIDTH = 60;
 const PRICE_SCALE_WIDTH = 96;
 const P10_P90_Z = 1.2815515655446004;
+const DEFAULT_STAKE = 50;
+const MAX_STAKE = 10_000;
+const HEADER_ACTION_PORTAL_ID = 'btc-multi-cone-header-action';
 
 function clamp(v: number, lo: number, hi: number) {
   return Math.min(hi, Math.max(lo, v));
@@ -69,6 +76,15 @@ function hexToRgba(hex: string, alpha: number) {
 function formatUsd(value: number) {
   if (Math.abs(value) >= 1000) return `$${(value / 1000).toFixed(value >= 100000 ? 0 : 1)}K`;
   return `$${value.toFixed(0)}`;
+}
+
+function formatStake(value: number) {
+  return `$${Math.round(value).toLocaleString('en-US')}`;
+}
+
+function stakeFromBuffer(buffer: string) {
+  const value = Number.parseInt(buffer, 10);
+  return Number.isFinite(value) ? value : 0;
 }
 
 function densityMedian(points: { x: number; y: number }[]) {
@@ -234,8 +250,17 @@ export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
   const drawingRef = useRef<{ zoneIdx: number; mode: DragMode } | null>(null);
   const focusProgressRef = useRef(0);
   const focusAnimationRef = useRef<number | null>(null);
+  const lastConfirmedStakeRef = useRef(DEFAULT_STAKE);
 
   const [coneStates, setConeStates] = useState<Record<number, ConeState>>({});
+  const [stakesByYear, setStakesByYear] = useState<Record<number, number>>({});
+  const [stakeEditor, setStakeEditor] = useState<StakeEditor>(null);
+  const [exitingStakeChips, setExitingStakeChips] = useState<Record<number, { stake: number; color: string }>>({});
+  const [shakeStakeIdx, setShakeStakeIdx] = useState<number | null>(null);
+  const [pulseStakeIdx, setPulseStakeIdx] = useState<number | null>(null);
+  const [submitStatus, setSubmitStatus] = useState<SubmitStatus>('idle');
+  const [submitMessage, setSubmitMessage] = useState<string | null>(null);
+  const [headerActionTarget, setHeaderActionTarget] = useState<HTMLElement | null>(null);
   const [activeZoneIdx, setActiveZoneIdx] = useState<number | null>(null);
   const [cursorTip, setCursorTip] = useState<CursorTip>(null);
   const [history, setHistory] = useState<PricePoint[]>(() => generateFallbackBtcHistory());
@@ -247,9 +272,16 @@ export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
   const m2 = useMarket(252), c2 = useConsensus(252, 300);
   const m3 = useMarket(253), c3 = useConsensus(253, 300);
   const m4 = useMarket(254), c4 = useConsensus(254, 300);
+  const buy0 = useBuy(250);
+  const buy1 = useBuy(251);
+  const buy2 = useBuy(252);
+  const buy3 = useBuy(253);
+  const buy4 = useBuy(254);
+  const { isAuthenticated } = useAuth();
 
   const markets = useMemo(() => [m0.market, m1.market, m2.market, m3.market, m4.market], [m0.market, m1.market, m2.market, m3.market, m4.market]);
   const consensuses = useMemo(() => [c0.consensus, c1.consensus, c2.consensus, c3.consensus, c4.consensus], [c0.consensus, c1.consensus, c2.consensus, c3.consensus, c4.consensus]);
+  const buyHooks = useMemo(() => [buy0, buy1, buy2, buy3, buy4], [buy0, buy1, buy2, buy3, buy4]);
   const allLoaded = markets.every(Boolean) && consensuses.every(Boolean);
 
   const latestPrice = history[history.length - 1]?.value ?? 100000;
@@ -311,6 +343,15 @@ export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
     };
   }, [allLoaded, coneStates, consensuses, getConeOrigin, latestPrice, markets]);
 
+  const activeCones = useMemo(() => Object.entries(coneStates)
+    .map(([idx, state]) => ({ idx: Number(idx), state, cfg: MARKETS[Number(idx)] }))
+    .sort((a, b) => a.idx - b.idx), [coneStates]);
+
+  const totalStake = useMemo(() => activeCones.reduce(
+    (sum, { idx }) => sum + (stakesByYear[idx] ?? DEFAULT_STAKE),
+    0,
+  ), [activeCones, stakesByYear]);
+
   useEffect(() => {
     const cached = readCachedBtcHistory();
     if (cached) {
@@ -343,6 +384,10 @@ export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
       });
 
     return () => ac.abort();
+  }, []);
+
+  useEffect(() => {
+    setHeaderActionTarget(document.getElementById(HEADER_ACTION_PORTAL_ID));
   }, []);
 
   const drawOverlay = useCallback(() => {
@@ -1252,6 +1297,115 @@ export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
     });
   }, [fractionForZone, getConeOrigin, markets]);
 
+  const triggerStakeShake = useCallback((idx: number) => {
+    setShakeStakeIdx(idx);
+    window.setTimeout(() => {
+      setShakeStakeIdx(current => (current === idx ? null : current));
+    }, 260);
+  }, []);
+
+  const triggerStakePulse = useCallback((idx: number, delay = 0) => {
+    window.setTimeout(() => {
+      setPulseStakeIdx(idx);
+      window.setTimeout(() => {
+        setPulseStakeIdx(current => (current === idx ? null : current));
+      }, 280);
+    }, delay);
+  }, []);
+
+  const startStakeEdit = useCallback((idx: number) => {
+    const value = stakesByYear[idx] ?? DEFAULT_STAKE;
+    setCursorTip(null);
+    setStakeEditor({ idx, buffer: String(value), original: value });
+  }, [stakesByYear]);
+
+  const cancelStakeEdit = useCallback(() => {
+    setStakeEditor(null);
+  }, []);
+
+  const confirmStakeEdit = useCallback((advance = false) => {
+    if (!stakeEditor) return;
+    const nextValue = stakeFromBuffer(stakeEditor.buffer);
+    if (nextValue < 1) {
+      triggerStakeShake(stakeEditor.idx);
+      setStakeEditor(null);
+      return;
+    }
+
+    const cappedValue = Math.min(nextValue, MAX_STAKE);
+    setStakesByYear(prev => ({ ...prev, [stakeEditor.idx]: cappedValue }));
+    lastConfirmedStakeRef.current = cappedValue;
+    if (cappedValue !== stakeEditor.original) triggerStakePulse(stakeEditor.idx);
+
+    if (advance) {
+      const nextCone = activeCones.find(cone => cone.idx > stakeEditor.idx);
+      if (nextCone) {
+        const value = stakesByYear[nextCone.idx] ?? lastConfirmedStakeRef.current;
+        setStakeEditor({ idx: nextCone.idx, buffer: String(value), original: value });
+        return;
+      }
+    }
+
+    setStakeEditor(null);
+  }, [activeCones, stakeEditor, stakesByYear, triggerStakePulse, triggerStakeShake]);
+
+  useEffect(() => {
+    if (!stakeEditor) return undefined;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (/^\d$/.test(event.key)) {
+        event.preventDefault();
+        setStakeEditor(current => {
+          if (!current) return current;
+          const nextBuffer = `${current.buffer}${event.key}`.replace(/^0+(?=\d)/, '');
+          const nextValue = stakeFromBuffer(nextBuffer);
+          if (nextValue > MAX_STAKE) return current;
+          return { ...current, buffer: nextBuffer };
+        });
+        return;
+      }
+
+      if (event.key === 'Backspace') {
+        event.preventDefault();
+        setStakeEditor(current => (current ? { ...current, buffer: current.buffer.slice(0, -1) } : current));
+        return;
+      }
+
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        confirmStakeEdit(false);
+        return;
+      }
+
+      if (event.key === 'Tab') {
+        event.preventDefault();
+        confirmStakeEdit(true);
+        return;
+      }
+
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        cancelStakeEdit();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [cancelStakeEdit, confirmStakeEdit, stakeEditor]);
+
+  useEffect(() => {
+    if (!stakeEditor) return undefined;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (target instanceof Element && target.closest('.btc-multi-cone-stake-chip')) return;
+      confirmStakeEdit(false);
+    };
+
+    window.addEventListener('pointerdown', handlePointerDown, true);
+    return () => window.removeEventListener('pointerdown', handlePointerDown, true);
+  }, [confirmStakeEdit, stakeEditor]);
+
   const handleStageMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const point = getStagePoint(e);
     if (!point) return;
@@ -1273,6 +1427,11 @@ export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
         ? modeForPointer(zoneIdx, point.x, point.y, point.width, existing)
         : 'mean';
       drawingRef.current = { zoneIdx, mode };
+      if (!prev[zoneIdx]) {
+        setStakesByYear(stakes => (
+          stakes[zoneIdx] ? stakes : { ...stakes, [zoneIdx]: lastConfirmedStakeRef.current }
+        ));
+      }
       return prev[zoneIdx] ? prev : { ...prev, [zoneIdx]: existing };
     });
   }, [getConeOrigin, getStagePoint, getZone, markets, modeForPointer]);
@@ -1317,18 +1476,106 @@ export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
   const clearCone = useCallback((idx: number) => {
     drawingRef.current = null;
     setCursorTip(null);
+    setStakeEditor(current => (current?.idx === idx ? null : current));
+    setExitingStakeChips(prev => ({
+      ...prev,
+      [idx]: { stake: stakesByYear[idx] ?? DEFAULT_STAKE, color: MARKETS[idx].color },
+    }));
+    window.setTimeout(() => {
+      setExitingStakeChips(prev => {
+        if (!prev[idx]) return prev;
+        const next = { ...prev };
+        delete next[idx];
+        return next;
+      });
+    }, 180);
     setActiveZoneIdx(current => (current === idx ? null : current));
+    setStakesByYear(prev => {
+      if (!prev[idx]) return prev;
+      const next = { ...prev };
+      delete next[idx];
+      return next;
+    });
     setConeStates(prev => {
       if (!prev[idx]) return prev;
       const next = { ...prev };
       delete next[idx];
       return next;
     });
-  }, []);
+  }, [stakesByYear]);
 
-  const activeCones = Object.entries(coneStates)
-    .map(([idx, state]) => ({ idx: Number(idx), state, cfg: MARKETS[Number(idx)] }))
-    .sort((a, b) => a.idx - b.idx);
+  const handleSubmitAll = useCallback(async () => {
+    if (!isAuthenticated || activeCones.length === 0 || submitStatus === 'loading') return;
+    setSubmitStatus('loading');
+    setSubmitMessage(null);
+    setStakeEditor(null);
+
+    try {
+      for (const { idx, state } of activeCones) {
+        const market = markets[idx];
+        if (!market) throw new Error(`${MARKETS[idx].label} market data is not loaded.`);
+        const { numBuckets, lowerBound, upperBound } = market.config;
+        const sigma = confidenceToStdDev(state.confidence, lowerBound, upperBound);
+        const belief = generateGaussian(state.prediction, sigma, numBuckets, lowerBound, upperBound);
+        await buyHooks[idx].execute(belief, stakesByYear[idx] ?? DEFAULT_STAKE);
+      }
+
+      activeCones.forEach(({ idx }, order) => triggerStakePulse(idx, order * 80));
+      setSubmitStatus('success');
+      window.setTimeout(() => {
+        setSubmitStatus(current => (current === 'success' ? 'idle' : current));
+      }, 2000);
+    } catch (error) {
+      setSubmitMessage(error instanceof Error ? error.message : String(error));
+      setSubmitStatus('error');
+      window.setTimeout(() => {
+        setSubmitStatus(current => (current === 'error' ? 'idle' : current));
+        setSubmitMessage(null);
+      }, 3000);
+    }
+  }, [activeCones, buyHooks, isAuthenticated, markets, stakesByYear, submitStatus, triggerStakePulse]);
+
+  const submitDisabled = submitStatus === 'loading' || !isAuthenticated || activeCones.length === 0;
+  const submitLabel = submitStatus === 'loading'
+    ? 'Placing bets...'
+    : submitStatus === 'success'
+      ? 'Bets placed'
+      : submitStatus === 'error'
+        ? 'Retry - error placing bets'
+        : !isAuthenticated
+          ? 'Sign in to submit bets'
+          : activeCones.length === 0
+            ? 'Draw a cone to submit'
+            : `Submit All ${formatStake(totalStake)} Bets`;
+
+  const submitButton = (
+    <button
+      type="button"
+      className={`btc-multi-cone-submit-btn ${submitStatus === 'success' ? 'success' : ''} ${submitStatus === 'error' ? 'error' : ''}`}
+      disabled={submitDisabled}
+      title={submitStatus === 'error' && submitMessage ? submitMessage : undefined}
+      onClick={handleSubmitAll}
+    >
+      {submitStatus === 'loading' && <span className="btc-multi-cone-submit-spinner" aria-hidden="true" />}
+      {submitStatus === 'success' && <span aria-hidden="true">✓</span>}
+      <span>{submitLabel}</span>
+    </button>
+  );
+
+  const stakeChipEntries = [
+    ...activeCones.map(({ idx, cfg }) => ({
+      idx,
+      color: cfg.color,
+      stake: stakesByYear[idx] ?? DEFAULT_STAKE,
+      exiting: false,
+    })),
+    ...Object.entries(exitingStakeChips).map(([idx, chip]) => ({
+      idx: Number(idx),
+      color: chip.color,
+      stake: chip.stake,
+      exiting: true,
+    })),
+  ];
 
   if (!allLoaded) {
     return (
@@ -1339,6 +1586,8 @@ export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
   }
 
   return (
+    <>
+    {headerActionTarget && createPortal(submitButton, headerActionTarget)}
     <div className="cone-chart-card btc-multi-cone-card" style={{ height: visibleHeight }}>
       <div
         className="cone-chart-stage"
@@ -1397,6 +1646,58 @@ export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
             />
           );
         })}
+        {stakeChipEntries.map(({ idx, color, stake, exiting }) => {
+          const r = (idx + 0.5) / MARKETS.length;
+          const leftOffset = 52 - 148 * r;
+          const isEditing = stakeEditor?.idx === idx;
+          const displayValue = isEditing
+            ? `$${stakeEditor.buffer}`
+            : formatStake(stake);
+          return (
+            <button
+              key={`stake-${idx}-${exiting ? 'exiting' : 'active'}`}
+              type="button"
+              data-stake-chip={idx}
+              className={[
+                'btc-multi-cone-stake-chip',
+                isEditing ? 'editing' : '',
+                exiting ? 'exiting' : '',
+                shakeStakeIdx === idx ? 'shake' : '',
+                pulseStakeIdx === idx ? 'pulse' : '',
+              ].filter(Boolean).join(' ')}
+              style={{
+                left: `calc(${(r * 100).toFixed(4)}% + ${leftOffset.toFixed(2)}px)`,
+                borderColor: hexToRgba(color, isEditing ? 0.72 : 0.4),
+                color,
+              }}
+              aria-label={`Edit ${MARKETS[idx].label} bet size`}
+              disabled={exiting}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+              }}
+              onMouseMove={(e) => {
+                e.stopPropagation();
+                setCursorTip(null);
+              }}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (!isEditing && !exiting) startStakeEdit(idx);
+              }}
+            >
+              <span className="btc-multi-cone-stake-amount">{displayValue}</span>
+              {isEditing ? (
+                <span className="btc-multi-cone-stake-caret" aria-hidden="true" />
+              ) : (
+                <svg className="btc-multi-cone-stake-pencil" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 20h9" />
+                  <path d="m16.5 3.5 4 4L8 20l-5 1 1-5 12.5-12.5Z" />
+                </svg>
+              )}
+            </button>
+          );
+        })}
         {cursorTip && (
           <div
             className="btc-multi-cone-cursor-tip"
@@ -1425,5 +1726,6 @@ export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
         </div>
       </div>
     </div>
+    </>
   );
 }

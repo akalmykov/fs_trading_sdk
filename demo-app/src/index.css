@@ -179,6 +179,175 @@ body {
   outline: none;
 }
 
+.btc-multi-cone-stake-chip {
+  position: absolute;
+  z-index: 8;
+  top: 48px;
+  min-width: 72px;
+  height: 30px;
+  transform: translateX(-50%) scale(1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 5px 10px 5px 12px;
+  border: 1px solid;
+  border-radius: 20px;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(6px);
+  color: #f8fafc;
+  cursor: text;
+  pointer-events: auto;
+  opacity: 1;
+  animation: btcStakeEnter 200ms cubic-bezier(0.2, 0.8, 0.4, 1);
+  transition: min-width 120ms ease-out, background-color 120ms ease-out, border-color 120ms ease-out, transform 140ms ease;
+}
+
+.btc-multi-cone-stake-chip:hover {
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.btc-multi-cone-stake-chip.editing {
+  min-width: 100px;
+  border-color: rgba(255, 255, 255, 0.8) !important;
+  background: rgba(0, 0, 0, 0.62);
+}
+
+.btc-multi-cone-stake-chip.shake {
+  animation: btcStakeShake 240ms ease;
+}
+
+.btc-multi-cone-stake-chip.pulse {
+  animation: btcStakePulse 250ms ease;
+}
+
+.btc-multi-cone-stake-chip.exiting {
+  pointer-events: none;
+  animation: btcStakeExit 160ms ease forwards;
+}
+
+.btc-multi-cone-stake-amount {
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.btc-multi-cone-stake-pencil {
+  width: 12px;
+  height: 12px;
+  opacity: 0.7;
+  color: currentColor;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: opacity 80ms ease;
+}
+
+.btc-multi-cone-stake-chip:hover .btc-multi-cone-stake-pencil {
+  opacity: 1;
+}
+
+.btc-multi-cone-stake-caret {
+  width: 1px;
+  height: 12px;
+  background: rgba(255, 255, 255, 0.92);
+  animation: btcStakeCaret 1060ms steps(2, start) infinite;
+}
+
+.btc-multi-cone-header-action {
+  margin-left: auto;
+  margin-right: 0.75rem;
+}
+
+.btc-multi-cone-submit-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  min-height: 34px;
+  padding: 0.45rem 0.8rem;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 7px;
+  background: linear-gradient(180deg, rgba(59, 130, 246, 0.95), rgba(37, 99, 235, 0.95));
+  color: #fff;
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  white-space: nowrap;
+  box-shadow: 0 8px 22px rgba(37, 99, 235, 0.22);
+  transition: transform 140ms ease, opacity 140ms ease, background 140ms ease, box-shadow 140ms ease;
+}
+
+.btc-multi-cone-submit-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 26px rgba(37, 99, 235, 0.28);
+}
+
+.btc-multi-cone-submit-btn:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+  background: rgba(51, 65, 85, 0.9);
+  box-shadow: none;
+}
+
+.btc-multi-cone-submit-btn.success {
+  background: rgba(16, 185, 129, 0.88);
+  box-shadow: 0 8px 22px rgba(16, 185, 129, 0.18);
+}
+
+.btc-multi-cone-submit-btn.error {
+  background: rgba(127, 29, 29, 0.95);
+  border-color: rgba(248, 113, 113, 0.42);
+  color: #fecaca;
+  box-shadow: 0 8px 22px rgba(127, 29, 29, 0.18);
+}
+
+.btc-multi-cone-submit-spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(255, 255, 255, 0.34);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: btcSubmitSpin 700ms linear infinite;
+}
+
+@keyframes btcStakeEnter {
+  from { opacity: 0; transform: translateX(-50%) scale(0.7); }
+  to { opacity: 1; transform: translateX(-50%) scale(1); }
+}
+
+@keyframes btcStakePulse {
+  0% { transform: translateX(-50%) scale(1); }
+  45% { transform: translateX(-50%) scale(1.18); }
+  100% { transform: translateX(-50%) scale(1); }
+}
+
+@keyframes btcStakeExit {
+  from { opacity: 1; transform: translateX(-50%) scale(1); }
+  to { opacity: 0; transform: translateX(-50%) scale(0.7); }
+}
+
+@keyframes btcStakeShake {
+  0%, 100% { transform: translateX(-50%) translateX(0); }
+  25% { transform: translateX(-50%) translateX(-5px); }
+  50% { transform: translateX(-50%) translateX(5px); }
+  75% { transform: translateX(-50%) translateX(-3px); }
+}
+
+@keyframes btcStakeCaret {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+
+@keyframes btcSubmitSpin {
+  to { transform: rotate(360deg); }
+}
+
 /* ── Settlement line ── */
 .cone-chart-settlement-line {
   position: absolute;
