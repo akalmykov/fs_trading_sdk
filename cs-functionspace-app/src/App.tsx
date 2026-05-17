@@ -86,7 +86,7 @@ function MatchCard({ match }: { match: Match }) {
       {/* Teams */}
       <div className="match-teams">
         <div className="match-team">
-          <div className="team-logo">{match.teamA.abbr}</div>
+          <img className="team-logo" src={match.teamA.logo} alt={match.teamA.abbr} />
           <div className="team-info">
             <div className="team-name">{match.teamA.name}</div>
             <div className="team-rank">#{match.teamA.rank} world</div>
@@ -116,7 +116,7 @@ function MatchCard({ match }: { match: Match }) {
             <div className="team-name">{match.teamB.name}</div>
             <div className="team-rank">#{match.teamB.rank} world</div>
           </div>
-          <div className="team-logo">{match.teamB.abbr}</div>
+          <img className="team-logo" src={match.teamB.logo} alt={match.teamB.abbr} />
         </div>
       </div>
 

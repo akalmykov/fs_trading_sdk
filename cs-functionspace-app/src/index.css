@@ -265,13 +265,7 @@ body {
   width: 32px;
   height: 32px;
   border-radius: 4px;
-  background: var(--surface-soft);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--muted);
+  object-fit: contain;
 }
 
 .team-info .team-name { font-size: 14px; font-weight: 700; color: var(--ink); }
