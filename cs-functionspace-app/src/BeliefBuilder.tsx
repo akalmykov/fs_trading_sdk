@@ -93,7 +93,12 @@ function getMultiplierColor(mult: number): string {
 
 function getBrickH(count: number): number {
   if (count <= 0) return MAX_BRICK_H;
-  return Math.max(MIN_BRICK_H, Math.min(MAX_BRICK_H, Math.floor(GRID_H / count)));
+  const naturalHeight = count * MAX_BRICK_H;
+  if (naturalHeight <= GRID_H) {
+    return MAX_BRICK_H;
+  } else {
+    return Math.max(MIN_BRICK_H, Math.floor(GRID_H / count));
+  }
 }
 
 /* ── Component ── */
@@ -131,7 +136,10 @@ export function BeliefBuilder({ onBeliefChange }: BeliefBuilderProps) {
 
   return (
     <div className="bb-container">
-      <div className="bb-context">Market consensus: {CONSENSUS_MEAN.toFixed(1)} rounds avg · P(under 23.5): 83.5%</div>
+      <div className="bb-context">
+        <span>Market consensus: {CONSENSUS_MEAN.toFixed(1)} rounds avg · P(under 23.5): 83.5%</span>
+        {totalBricks > 0 && <button className="bb-reset" onClick={() => setBricks(new Array(COLUMNS).fill(0))}>Reset</button>}
+      </div>
 
       <div className="bb-grid" onMouseLeave={() => setHoverCol(null)}>
         {bricks.map((count, col) => {
