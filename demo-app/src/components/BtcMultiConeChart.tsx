@@ -175,9 +175,9 @@ function stdDevToConfidence(sigma: number, lb: number, ub: number) {
   return clamp(((maxSigma - sigma) / (maxSigma - minSigma)) * 100, 0, 100);
 }
 
-function conePricesAtFraction(state: ConeState, frac: number, latestPrice: number, lb: number, ub: number) {
+function conePricesAtFraction(state: ConeState, frac: number, startPrice: number, lb: number, ub: number) {
   const t = clamp(frac, 0, 1);
-  const center = latestPrice + (state.prediction - latestPrice) * t;
+  const center = startPrice + (state.prediction - startPrice) * t;
   const sigma = confidenceToStdDev(state.confidence, lb, ub);
   const halfWidth = sigma * t * P10_P90_Z;
   return {
@@ -236,6 +236,24 @@ export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
   const latestPrice = history[history.length - 1]?.value ?? 100000;
   const today = history[history.length - 1]?.time ?? toISO(new Date());
 
+  const getConeOrigin = useCallback((zoneIdx: number, width: number, states: Record<number, ConeState> = coneStates) => {
+    for (let idx = zoneIdx - 1; idx >= 0; idx -= 1) {
+      const state = states[idx];
+      if (state) {
+        return {
+          sourceIdx: idx,
+          x: settlementXForZone(idx, width),
+          price: state.prediction,
+        };
+      }
+    }
+    return {
+      sourceIdx: -1,
+      x: zoneLayout(width).originX,
+      price: latestPrice,
+    };
+  }, [coneStates, latestPrice]);
+
   const visiblePriceRange = useMemo(() => {
     const values = [latestPrice];
     if (allLoaded) {
@@ -256,7 +274,7 @@ export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
       const prices = conePricesAtFraction(
         state,
         1,
-        latestPrice,
+        getConeOrigin(Number(idx), 1000).price,
         market.config.lowerBound,
         market.config.upperBound,
       );
@@ -271,7 +289,7 @@ export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
       min: Math.max(1, min - padding),
       max: max + padding,
     };
-  }, [allLoaded, coneStates, consensuses, latestPrice, markets]);
+  }, [allLoaded, coneStates, consensuses, getConeOrigin, latestPrice, markets]);
 
   useEffect(() => {
     const cached = readCachedBtcHistory();
@@ -398,6 +416,7 @@ export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
       const cfg = MARKETS[idx];
       const lb = market.config.lowerBound;
       const ub = market.config.upperBound;
+      const origin = getConeOrigin(idx, rect.width);
       const settlementX = settlementXForZone(idx, rect.width);
       const steps = 120;
       const upper: { x: number; y: number }[] = [];
@@ -406,8 +425,8 @@ export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
 
       for (let step = 0; step <= steps; step += 1) {
         const t = step / steps;
-        const x = originX + (settlementX - originX) * t;
-        const prices = conePricesAtFraction(state, t, latestPrice, lb, ub);
+        const x = origin.x + (settlementX - origin.x) * t;
+        const prices = conePricesAtFraction(state, t, origin.price, lb, ub);
         const upperY = priceSeries.priceToCoordinate(prices.upper);
         const lowerY = priceSeries.priceToCoordinate(prices.lower);
         const centerY = priceSeries.priceToCoordinate(prices.center);
@@ -457,6 +476,18 @@ export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
         ctx.beginPath();
         ctx.arc(settlementX, centerY, 4, 0, Math.PI * 2);
         ctx.fill();
+      }
+      if (origin.sourceIdx >= 0) {
+        const originY = priceSeries.priceToCoordinate(origin.price);
+        if (originY !== null) {
+          ctx.fillStyle = cfg.color;
+          ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(origin.x, originY, 5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+        }
       }
       ctx.restore();
     };
@@ -758,7 +789,7 @@ export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
       ctx.fillText(cfg.label, x, 22);
       ctx.restore();
     }
-  }, [activeZoneIdx, allLoaded, coneStates, consensuses, latestPrice, markets, visiblePriceRange]);
+  }, [activeZoneIdx, allLoaded, coneStates, consensuses, getConeOrigin, latestPrice, markets, visiblePriceRange]);
 
   useEffect(() => {
     if (focusAnimationRef.current !== null) cancelAnimationFrame(focusAnimationRef.current);
@@ -928,11 +959,11 @@ export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
   }, [allLoaded]);
 
   const fractionForZone = useCallback((zoneIdx: number, x: number, width: number) => {
-    const { originX } = zoneLayout(width);
+    const { x: originX } = getConeOrigin(zoneIdx, width);
     const settlementX = settlementXForZone(zoneIdx, width);
     if (settlementX === originX) return null;
     return clamp((x - originX) / (settlementX - originX), 0.01, 1);
-  }, []);
+  }, [getConeOrigin]);
 
   const modeForPointer = useCallback((zoneIdx: number, x: number, y: number, width: number, state: ConeState): DragMode => {
     const priceSeries = historySeriesRef.current;
@@ -940,10 +971,11 @@ export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
     if (!priceSeries || !market) return 'mean';
     const frac = fractionForZone(zoneIdx, x, width);
     if (frac === null) return 'mean';
+    const origin = getConeOrigin(zoneIdx, width);
     const prices = conePricesAtFraction(
       state,
       frac,
-      latestPrice,
+      origin.price,
       market.config.lowerBound,
       market.config.upperBound,
     );
@@ -956,7 +988,7 @@ export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
       { mode: 'lower' as const, distance: lowerY === null ? Infinity : Math.abs(y - lowerY) },
     ].sort((a, b) => a.distance - b.distance);
     return candidates[0].distance <= 16 ? candidates[0].mode : 'mean';
-  }, [fractionForZone, latestPrice, markets]);
+  }, [fractionForZone, getConeOrigin, markets]);
 
   const applyDrag = useCallback((zoneIdx: number, mode: DragMode, x: number, y: number, width: number) => {
     const priceSeries = historySeriesRef.current;
@@ -968,10 +1000,11 @@ export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
 
     const lb = market.config.lowerBound;
     const ub = market.config.upperBound;
+    const origin = getConeOrigin(zoneIdx, width);
     setConeStates(prev => {
-      const current = prev[zoneIdx] ?? buildNeutralCone(latestPrice, lb, ub);
+      const current = prev[zoneIdx] ?? buildNeutralCone(origin.price, lb, ub);
       if (mode === 'mean') {
-        const meanAtSettlement = latestPrice + (price - latestPrice) / frac;
+        const meanAtSettlement = origin.price + (price - origin.price) / frac;
         return {
           ...prev,
           [zoneIdx]: {
@@ -981,7 +1014,7 @@ export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
         };
       }
 
-      const centerAtX = latestPrice + (current.prediction - latestPrice) * frac;
+      const centerAtX = origin.price + (current.prediction - origin.price) * frac;
       const sigma = Math.abs(price - centerAtX) / (frac * P10_P90_Z);
       return {
         ...prev,
@@ -991,7 +1024,7 @@ export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
         },
       };
     });
-  }, [fractionForZone, latestPrice, markets]);
+  }, [fractionForZone, getConeOrigin, markets]);
 
   const handleStageMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const point = getStagePoint(e);
@@ -1003,8 +1036,9 @@ export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
 
     setConeStates(prev => {
       const market = markets[zoneIdx]!;
+      const origin = getConeOrigin(zoneIdx, point.width, prev);
       const existing = prev[zoneIdx] ?? buildNeutralCone(
-        latestPrice,
+        origin.price,
         market.config.lowerBound,
         market.config.upperBound,
       );
@@ -1014,7 +1048,7 @@ export function BtcMultiConeChart({ height = 700 }: { height?: number }) {
       drawingRef.current = { zoneIdx, mode };
       return prev[zoneIdx] ? prev : { ...prev, [zoneIdx]: existing };
     });
-  }, [getStagePoint, getZone, latestPrice, markets, modeForPointer]);
+  }, [getConeOrigin, getStagePoint, getZone, markets, modeForPointer]);
 
   const handleStageMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const drawing = drawingRef.current;
