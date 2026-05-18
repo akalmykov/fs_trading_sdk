@@ -1,3 +1,23 @@
+# Submission Description
+
+I have built 4 novel UI components that enable new uses cases for probability distribution bets and a CS2 betting that uses one of the ideas.
+
+The components are:
+
+1. Candlestick Fan chart. It joins a traditional candle chart for past price data (something that users are familiar) with a cone drawing tool that defines a user's belief as a range for possible values of future price. Just just draw what you think will happen with the price and the app turns your drawing into a real bet. This component has been enabled for the "WTI Crude Oil Price (USD/bbl) on Dec 31, 2026" market.
+
+![alt text](image.png)
+
+2. Term Structure Heatmap with inline belief painting (vertical and horizontal versions). This component was designed for markets for a price of an asset at different points in time, e.g. BTC price in 2026, 2027, etc. It shows the entire probability distribution for an asset across time with heatmap of price points and allows users to paint a belief curve directly on the chart for any point in time to create a bet. The selected market is "Bitcoin Multi-Term Year-End Closing Price" for horizontal layout, and "S&P 500 Multi-Month Term Structure" for vertical layout. The belief brackets can be dragged and resized to define a probability distribution belief and then multiple bets can be placed with one click. 
+
+![alt text](image-1.png)
+![alt text](image-2.png)
+
+
+3. Term Structure Confidence Band Chart. This component was designed for markets for a price of an asset at different points in time, e.g. S&P 500 price in September 2026, October 2026, etc. Drag your forecast across multiple years at one chart, and the fan around each point shows exactly how certain you are: tight fan means conviction, wide fan means you're uncertain. Place multiple bets directly from the chart. 
+
+![alt text](image-3.png)
+
 # FunctionSpace Trading SDK
 
 A TypeScript SDK for embedding prediction market trading widgets into web applications. Developers install the packages via npm and drop in themed, interactive components that handle market visualization, trade input, and position management.
