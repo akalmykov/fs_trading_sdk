@@ -18,8 +18,6 @@ The components are:
 
 ![alt text](image-3.png)
 
-![alt text](image-4.png)
-
 
 4. Block-based (Tetris-style) distribution builder. This is a fun and intuitive way to create a probability distribution belief for the markets where multimodal distributions are possible. Instead of drawing a curve, user builds a probability distribution by stacking blocks that represent probability mass. The more blocks you add to an outcome, the more certain you are in your prediction. For the demo of this component, open "Tesla Optimus Units Sold or Deployed Internally by Dec 2026" market. Colors shown how contrarian your belief is compared to the market consensus.
 
