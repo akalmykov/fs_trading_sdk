@@ -3,7 +3,8 @@
   "private": true,
   "workspaces": [
     "packages/*",
-    "demo-app"
+    "demo-app",
+    "cs-functionspace-app"
   ],
   "devDependencies": {
     "@testing-library/react": "^16.3.2",
