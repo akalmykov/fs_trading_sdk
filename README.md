@@ -31,6 +31,11 @@ The components are:
 
 ![alt text](image-4.png)
 
+
+## Live Demo 
+
+[Live demo](https://fs-trading-sdk-demo-app.vercel.app/)
+
 ## CounterSpace - a CS2 eSport betting app concept
 
 Demo video: [https://www.youtube.com/watch?v=eKS9zzEuL8c](https://www.youtube.com/watch?v=eKS9zzEuL8c)
@@ -54,6 +59,11 @@ Think Team A will dominate? Skew your distribution toward low round counts. Thin
 
 ![alt text](image-6.png)
 
+## Live Demo 
+
+https://counter-space-vert.vercel.app/](https://counter-space-vert.vercel.app/)
+
+Switch to "Live mode" (top right) and login to place a bet.
 
 # FunctionSpace Trading SDK
 
