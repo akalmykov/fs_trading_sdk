@@ -1,6 +1,12 @@
 # Submission Description
 
-DEMO VIDEO LINK: [https://www.youtube.com/watch?v=oJUTklmLXh0](https://www.youtube.com/watch?v=oJUTklmLXh0)
+There are two submissions:
+- A set of UI components 
+- A CS2 eSport betting app that uses one of the novel components
+
+## UI Components
+
+DEMO VIDEO for UI components: [https://www.youtube.com/watch?v=oJUTklmLXh0](https://www.youtube.com/watch?v=oJUTklmLXh0)
 
 I have built 4 novel UI components that enable new uses cases for probability distribution bets and a CS2 betting that uses one of the ideas.
 
@@ -24,6 +30,28 @@ The components are:
 4. **Block-based (Tetris-style) distribution builder**. This is a fun and intuitive way to create a probability distribution belief for the markets where multimodal distributions are possible. Instead of drawing a curve, user builds a probability distribution by stacking blocks that represent probability mass. The more blocks you add to an outcome, the more certain you are in your prediction. For the demo of this component, open "Tesla Optimus Units Sold or Deployed Internally by Dec 2026" market. Colors shown how contrarian your belief is compared to the market consensus.
 
 ![alt text](image-4.png)
+
+## CounterSpace - a CS2 eSport betting app concept
+
+### Problem
+
+Counter-Strike 2 is one of the biggest competitive games on the planet. Two teams of five players battle it out in a series of rounds, taking turns attacking and defending. The first team to win 13 rounds takes the map. A match can end quickly in a 13–0 blowout, or drag out to a tense 13–11 where every round felt like it could go either way. It can even go into overtime if both teams reach 12 wins each.
+
+This means every map produces a final round count somewhere between 13 and well over 25 if overtime kicks in. That number tells you a huge amount about how the game actually played out: was it a stomp, a close fight, or an overtime war? Fans and bettors instinctively have feelings about this: "Team A always grinds out close maps" or "Team B tends to dominate early and run away with it."
+
+Yet when you go to place a bet on a traditional site, all of that knowledge hits a wall. Bookmakers offer one single line for total map rounds, typically set at 23.5 or 24.5. That's it: one over/under threshold for the entire map's round count, with no further granularity. You don't get to say "I think it'll end around 13–9." You just pick whether the total rounds will be above or below one fixed number and hope for the best.
+
+## Solution
+
+
+Instead of forcing you into a single over/under line, we let you bet on the full picture.
+
+When you open a CS2 map market, you see the entire range of possible round outcomes laid out visually — from a quick 13–0 blowout all the way through tight 13–11 finishes and into overtime. You simply draw your prediction across that range: drag a curve toward the scores you think are most likely, and pull it away from the ones you don't. The shape of your drawing is your bet.
+
+Think Team A will dominate? Skew your distribution toward low round counts. Think it'll be a grind that nearly goes to overtime? Pile your weight around 23–25 rounds. The more precise and accurate your read on the match, the more you win, not just whether you picked the right side of an arbitrary line set by a bookmaker. Your actual game knowledge finally has somewhere to go.
+
+![alt text](image-6.png)
+
 
 # FunctionSpace Trading SDK
 
