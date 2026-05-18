@@ -4,11 +4,11 @@ I have built 4 novel UI components that enable new uses cases for probability di
 
 The components are:
 
-1. Candlestick Fan chart. It joins a traditional candle chart for past price data (something that users are familiar) with a cone drawing tool that defines a user's belief as a range for possible values of future price. Just just draw what you think will happen with the price and the app turns your drawing into a real bet. This component has been enabled for the "WTI Crude Oil Price (USD/bbl) on Dec 31, 2026" market.
+1. **Candlestick Fan chart**. It joins a traditional candle chart for past price data (something that users are familiar) with a cone drawing tool that defines a user's belief as a range for possible values of future price. Just just draw what you think will happen with the price and the app turns your drawing into a real bet. This component has been enabled for the "WTI Crude Oil Price (USD/bbl) on Dec 31, 2026" market.
 
 ![alt text](image.png)
 
-2. Term Structure Heatmap with inline belief painting (vertical and horizontal versions). This component was designed for markets for a price of an asset at different points in time, e.g. BTC price in 2026, 2027, etc. It shows the entire probability distribution for an asset across time with heatmap of price points and allows users to paint a belief curve directly on the chart for any point in time to create a bet. The selected market is "Bitcoin Multi-Term Year-End Closing Price" for horizontal layout, and "S&P 500 Multi-Month Term Structure" for vertical layout. The belief brackets can be dragged and resized to define a probability distribution belief and then multiple bets can be placed with one click. 
+2. **Term Structure Heatmap with inline belief painting (vertical and horizontal versions)**. This component was designed for markets for a price of an asset at different points in time, e.g. BTC price in 2026, 2027, etc. It shows the entire probability distribution for an asset across time with heatmap of price points and allows users to paint a belief curve directly on the chart for any point in time to create a bet. The selected market is "Bitcoin Multi-Term Year-End Closing Price" for horizontal layout, and "S&P 500 Multi-Month Term Structure" for vertical layout. The belief brackets can be dragged and resized to define a probability distribution belief and then multiple bets can be placed with one click. 
 
 ![alt text](image-1.png)
 ![alt text](image-2.png)
@@ -19,7 +19,7 @@ The components are:
 ![alt text](image-3.png)
 
 
-4. Block-based (Tetris-style) distribution builder. This is a fun and intuitive way to create a probability distribution belief for the markets where multimodal distributions are possible. Instead of drawing a curve, user builds a probability distribution by stacking blocks that represent probability mass. The more blocks you add to an outcome, the more certain you are in your prediction. For the demo of this component, open "Tesla Optimus Units Sold or Deployed Internally by Dec 2026" market. Colors shown how contrarian your belief is compared to the market consensus.
+4. **Block-based (Tetris-style) distribution builder**. This is a fun and intuitive way to create a probability distribution belief for the markets where multimodal distributions are possible. Instead of drawing a curve, user builds a probability distribution by stacking blocks that represent probability mass. The more blocks you add to an outcome, the more certain you are in your prediction. For the demo of this component, open "Tesla Optimus Units Sold or Deployed Internally by Dec 2026" market. Colors shown how contrarian your belief is compared to the market consensus.
 
 ![alt text](image-4.png)
 
