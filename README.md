@@ -1,8 +1,8 @@
 # Submission Description
 
 There are two submissions:
-- A set of UI components 
-- A CS2 eSport betting app that uses one of the novel components
+- A set of UI components ([demo video](https://www.youtube.com/watch?v=oJUTklmLXh0))
+- A CS2 eSport betting app that uses one of the novel components ([demo video](https://www.youtube.com/watch?v=eKS9zzEuL8c))
 
 ## UI Components
 
@@ -32,6 +32,8 @@ The components are:
 ![alt text](image-4.png)
 
 ## CounterSpace - a CS2 eSport betting app concept
+
+Demo video: [https://www.youtube.com/watch?v=eKS9zzEuL8c](https://www.youtube.com/watch?v=eKS9zzEuL8c)
 
 ### Problem
 
