@@ -31,14 +31,14 @@ const COLOR_ANCHORS = [
   { t: 1.00, hex: '#16a34a' },  // 32 bricks — vivid green
 ];
 
-function bricksToRegions(bricks: number[]): Region[] {
+function bricksToRegions(bricks: number[], lowerBound: number, upperBound: number): Region[] {
   const total = bricks.reduce((a, b) => a + b, 0);
   if (total === 0) return [];
   const regions: Region[] = [];
-  const spread = (UPPER_BOUND - LOWER_BOUND) * 0.06;
+  const spread = (upperBound - lowerBound) * 0.06;
   for (let col = 0; col < bricks.length; col++) {
     if (bricks[col] === 0) continue;
-    const center = LOWER_BOUND + (col / (bricks.length - 1)) * (UPPER_BOUND - LOWER_BOUND);
+    const center = lowerBound + (col / (bricks.length - 1)) * (upperBound - lowerBound);
     regions.push({ type: 'point', center, spread, weight: bricks[col] });
   }
   return regions;
@@ -190,9 +190,26 @@ export interface BeliefBuilderProps {
   bricks: number[];
   onBricksChange: (bricks: number[]) => void;
   onBeliefChange?: (userP: number[], userMean: number, totalBricks: number) => void;
+  consensusP?: number[];
+  columnLabels?: string[];
+  roundValues?: number[];
+  columns?: number;
+  lowerBound?: number;
+  upperBound?: number;
+  numBuckets?: number;
+  externalMultipliers?: (number | null)[];
+  externalReturns?: (number | null)[];
 }
 
-export function BeliefBuilder({ bricks, onBricksChange, onBeliefChange }: BeliefBuilderProps) {
+export function BeliefBuilder({ bricks, onBricksChange, onBeliefChange, ...props }: BeliefBuilderProps) {
+  const cols = props.columns ?? COLUMNS;
+  const cP = props.consensusP ?? CONSENSUS_P;
+  const colLabels = props.columnLabels ?? COLUMN_LABELS;
+  const rValues = props.roundValues ?? ROUND_VALUES;
+  const lb = props.lowerBound ?? LOWER_BOUND;
+  const ub = props.upperBound ?? UPPER_BOUND;
+  const nb = props.numBuckets ?? NUM_BUCKETS;
+  const maxCP = Math.max(...cP);
   const [hoverCol, setHoverCol] = useState<number | null>(null);
   const [hint, setHint] = useState(0);
   const [fallingCols, setFallingCols] = useState<Set<number>>(new Set());
@@ -209,38 +226,43 @@ export function BeliefBuilder({ bricks, onBricksChange, onBeliefChange }: Belief
   // Build belief vector from the smooth curve (for submission/display)
   const beliefVector = useMemo(() => {
     if (totalBricks === 0) return null;
-    return generateBelief(bricksToRegions(bricks), NUM_BUCKETS, LOWER_BOUND, UPPER_BOUND);
-  }, [bricks, totalBricks]);
+    return generateBelief(bricksToRegions(bricks, lb, ub), nb, lb, ub);
+  }, [bricks, totalBricks, lb, ub, nb]);
 
   // Build consensus as a smooth belief vector
   const consensusVector = useMemo(() => {
-    const regions: Region[] = ROUND_VALUES.map((v, i) => ({
+    const regions: Region[] = rValues.map((v, i) => ({
       type: 'point' as const,
       center: v,
-      spread: (UPPER_BOUND - LOWER_BOUND) * 0.06,
-      weight: CONSENSUS_P[i],
+      spread: (ub - lb) * 0.06,
+      weight: cP[i],
     }));
-    return generateBelief(regions, NUM_BUCKETS, LOWER_BOUND, UPPER_BOUND);
-  }, []);
+    return generateBelief(regions, nb, lb, ub);
+  }, [rValues, cP, lb, ub, nb]);
 
   // Multipliers from the smooth curve sampled at each column
   const BASE_STAKE = 100;
   const stake = BASE_STAKE * (totalBricks / TOTAL_BRICKS_MAX);
   const multipliers = useMemo(() => {
-    if (!beliefVector) return new Array(COLUMNS).fill(null);
-    return ROUND_VALUES.map((v) => {
-      const u = (v - LOWER_BOUND) / (UPPER_BOUND - LOWER_BOUND);
-      const idx = Math.round(u * (NUM_BUCKETS + 1));
+    if (props.externalMultipliers) return props.externalMultipliers;
+    if (!beliefVector) return new Array(cols).fill(null);
+    return rValues.map((v) => {
+      const u = (v - lb) / (ub - lb);
+      const idx = Math.round(u * (nb + 1));
       const b = beliefVector[idx] || 0;
       const c = consensusVector[idx] || 0.001;
       if (b < 0.001) return null;
       const mult = b / c;
       return mult < 0.05 ? null : mult;
     });
-  }, [beliefVector, consensusVector]);
-  const returnIfWin = useMemo(() => multipliers.map((m) => m !== null ? stake * m : null), [multipliers, stake]);
-  const userMean = useMemo(() => totalBricks > 0 ? ROUND_VALUES.reduce((s, v, i) => s + v * userP[i], 0) : null, [userP, totalBricks]);
-  const edge = userMean !== null ? userMean - CONSENSUS_MEAN : null;
+  }, [beliefVector, consensusVector, props.externalMultipliers, rValues, lb, ub, nb, cols]);
+  const returnIfWin = useMemo(() => {
+    if (props.externalReturns) return props.externalReturns;
+    return multipliers.map((m) => m !== null ? stake * m : null);
+  }, [multipliers, stake, props.externalReturns]);
+  const userMean = useMemo(() => totalBricks > 0 ? rValues.reduce((s, v, i) => s + v * userP[i], 0) : null, [userP, totalBricks, rValues]);
+  const consensusMean = useMemo(() => rValues.reduce((s, v, i) => s + v * (cP[i] / 100), 0), [rValues, cP]);
+  const edge = userMean !== null ? userMean - consensusMean : null;
   const pUnder235 = useMemo(() => totalBricks > 0 ? userP.slice(0, 11).reduce((s, p) => s + p, 0) * 100 : null, [userP, totalBricks]);
 
   // Compute belief curve SVG path from beliefVector
@@ -248,7 +270,7 @@ export function BeliefBuilder({ bricks, onBricksChange, onBeliefChange }: Belief
     if (!beliefVector) return '';
     const max = Math.max(...beliefVector);
     if (max === 0) return '';
-    const gridW = COLUMNS * COL_PITCH - 2;
+    const gridW = cols * COL_PITCH - 2;
     const points = beliefVector.map((v, i) => {
       const x = (i / (beliefVector.length - 1)) * gridW;
       const y = GRID_H - (v / max) * GRID_H * 0.9;
@@ -364,7 +386,7 @@ export function BeliefBuilder({ bricks, onBricksChange, onBeliefChange }: Belief
       setTimeout(() => setFallingCols(prev => { const n = new Set(prev); n.delete(col); return n; }), 220);
 
       // Trigger column flash
-      const edgeRatio = (newCount > 0 && totalBricks + 1 > 0) ? (CONSENSUS_P[col] / 100) / (newCount / (totalBricks + 1)) : 1;
+      const edgeRatio = (newCount > 0 && totalBricks + 1 > 0) ? (cP[col] / 100) / (newCount / (totalBricks + 1)) : 1;
       const color = getBrickColor(newCount, edgeRatio);
       setFlashCols(prev => ({ ...prev, [col]: color }));
       setTimeout(() => setFlashCols(prev => { const n = { ...prev }; delete n[col]; return n; }), 320);
@@ -384,8 +406,8 @@ export function BeliefBuilder({ bricks, onBricksChange, onBeliefChange }: Belief
   return (
     <div className="bb-container">
       <div className="bb-context">
-        <span>Market consensus: {CONSENSUS_MEAN.toFixed(1)} rounds avg · P(under 23.5): 83.5%</span>
-        {totalBricks > 0 && <button className="bb-reset" onClick={() => onBricksChange(new Array(COLUMNS).fill(0))}>Reset</button>}
+        <span>Market consensus: {consensusMean.toFixed(1)} rounds avg</span>
+        {totalBricks > 0 && <button className="bb-reset" onClick={() => onBricksChange(new Array(cols).fill(0))}>Reset</button>}
       </div>
 
       <div className="bb-counts">
@@ -397,12 +419,12 @@ export function BeliefBuilder({ bricks, onBricksChange, onBeliefChange }: Belief
       <div className="bb-grid" ref={gridRef} onMouseLeave={() => setHoverCol(null)}>
         <canvas ref={particleCanvasRef} className="bb-particle-canvas" />
         {beliefPath && (
-          <svg className="bb-curve-overlay" viewBox={`0 0 ${COLUMNS * COL_PITCH - 2} ${GRID_H}`} preserveAspectRatio="none">
+          <svg className="bb-curve-overlay" viewBox={`0 0 ${cols * COL_PITCH - 2} ${GRID_H}`} preserveAspectRatio="none">
             <path d={beliefPath} fill="none" stroke="#f97316" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" opacity="0.85" />
           </svg>
         )}
         {bricks.map((count, col) => {
-          const consensusH = (CONSENSUS_P[col] / MAX_CONSENSUS_P) * GRID_H;
+          const consensusH = (cP[col] / maxCP) * GRID_H;
           const brickH = getBrickH(count);
           const isHovered = hoverCol === col;
           const canAdd = Math.floor(GRID_H / (count + 1)) >= MIN_BRICK_H && totalBricks < TOTAL_BRICKS_MAX;
@@ -414,7 +436,7 @@ export function BeliefBuilder({ bricks, onBricksChange, onBeliefChange }: Belief
               {flashCols[col] && <div className="bb-col-flash" style={{ background: flashCols[col] }} />}
               <div className="bb-brick-stack">
                 {Array.from({ length: count }).map((_, i) => {
-                  const edgeRatio = userP[col] > 0 ? (CONSENSUS_P[col] / 100) / userP[col] : 1;
+                  const edgeRatio = userP[col] > 0 ? (cP[col] / 100) / userP[col] : 1;
                   const color = getBrickColor(count, edgeRatio);
                   const isNewest = i === count - 1 && isFalling;
                   return (
@@ -432,10 +454,10 @@ export function BeliefBuilder({ bricks, onBricksChange, onBeliefChange }: Belief
       </div>
 
       <div className="bb-labels">
-        {COLUMN_LABELS.map((label, i) => (
+        {colLabels.map((label, i) => (
           <div key={i} className={`bb-label ${hoverCol === i ? 'active' : ''}`}>
             <span className="bb-label-round">{label}</span>
-            <span className="bb-label-pct">{CONSENSUS_P[i]}%</span>
+            <span className="bb-label-pct">{cP[i].toFixed(1)}%</span>
           </div>
         ))}
       </div>
@@ -474,7 +496,7 @@ export function BeliefBuilder({ bricks, onBricksChange, onBeliefChange }: Belief
       <div className="bb-summary">
         {totalBricks > 0 ? (<>
           <span style={{ color: '#262626', fontWeight: 700 }}>Your mean: {userMean!.toFixed(1)} rds</span>
-          <span style={{ color: '#6b6b6b' }}>Market: {CONSENSUS_MEAN.toFixed(1)} rds</span>
+          <span style={{ color: '#6b6b6b' }}>Market: {consensusMean.toFixed(1)} rds</span>
           <span style={{ color: edgeColor }}>Edge: {edge! >= 0 ? '+' : ''}{edge!.toFixed(1)} rds</span>
           <span style={{ color: totalBricks > 28 ? '#f59e0b' : '#9a9a9a' }}>{totalBricks}/{TOTAL_BRICKS_MAX}</span>
         </>) : <span style={{ color: '#9a9a9a' }}>Click columns to build your belief</span>}

@@ -16,8 +16,8 @@ export async function discoverMarkets(
   const items = Array.isArray(data.markets) ? data.markets : [];
 
   const mapped: MarketState[] = items.map((item: any) => {
-    if (item.alpha_vector == null) throw new Error('Missing alpha_vector in market list item');
-    const alphaVector: number[] = item.alpha_vector;
+    const alphaVector: number[] | undefined = item.alpha_vector ?? item.state_vector;
+    if (alphaVector == null) throw new Error('Missing alpha_vector/state_vector in market list item');
     const totalMass = alphaVector.reduce((a: number, b: number) => a + b, 0);
     const consensus = totalMass > 0
       ? alphaVector.map((a: number) => a / totalMass)

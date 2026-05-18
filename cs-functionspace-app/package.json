@@ -11,6 +11,8 @@
   },
   "dependencies": {
     "@functionspace/core": "workspace:*",
+    "@functionspace/react": "workspace:*",
+    "@functionspace/ui": "workspace:*",
     "react": "^19.2.6",
     "react-dom": "^19.2.6"
   },

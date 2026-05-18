@@ -77,6 +77,142 @@ body {
   color: var(--muted);
 }
 
+.top-bar-mode-toggle {
+  display: flex;
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.top-bar-mode-toggle button {
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.top-bar-mode-toggle button.active {
+  background: #1c69d4;
+  color: #fff;
+}
+
+/* Override SDK auth widget for light theme */
+.fs-passwordless-auth {
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+  font-family: 'Inter', -apple-system, sans-serif !important;
+}
+
+.fs-auth-modal-backdrop {
+  background: rgba(0, 0, 0, 0.4) !important;
+}
+
+.fs-auth-modal.fs-passwordless-auth {
+  background: #fff !important;
+  border: 1px solid #e0e0e0 !important;
+  padding: 1.5rem !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12) !important;
+  border-radius: 4px !important;
+}
+
+.fs-auth-actions {
+  font-family: 'Inter', -apple-system, sans-serif !important;
+}
+
+.fs-auth-actions span {
+  color: #6b6b6b !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+}
+
+.fs-auth-form-title {
+  color: #1a1a1a !important;
+  font-family: 'Inter', -apple-system, sans-serif !important;
+}
+
+.fs-auth-label,
+.fs-auth-label-hint {
+  color: #6b6b6b !important;
+  font-family: 'Inter', -apple-system, sans-serif !important;
+}
+
+.fs-auth-input {
+  background: #f8f8f8 !important;
+  border: 1px solid #e0e0e0 !important;
+  color: #1a1a1a !important;
+  border-radius: 4px !important;
+  font-family: 'Inter', -apple-system, sans-serif !important;
+}
+
+.fs-auth-input:focus {
+  border-color: #1c69d4 !important;
+  box-shadow: 0 0 0 2px rgba(28, 105, 212, 0.15) !important;
+}
+
+.fs-auth-btn-primary {
+  background: #1c69d4 !important;
+  border-radius: 4px !important;
+  font-family: 'Inter', -apple-system, sans-serif !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  padding: 6px 12px !important;
+}
+
+.fs-auth-btn-secondary {
+  background: #f8f8f8 !important;
+  color: #1a1a1a !important;
+  border: 1px solid #e0e0e0 !important;
+  border-radius: 4px !important;
+  font-family: 'Inter', -apple-system, sans-serif !important;
+  font-size: 12px !important;
+}
+
+.fs-auth-error {
+  background: #fef2f2 !important;
+  border: 1px solid #fecaca !important;
+  color: #dc2626 !important;
+}
+
+.fs-auth-mode-link {
+  color: #6b6b6b !important;
+  font-family: 'Inter', -apple-system, sans-serif !important;
+}
+
+.fs-auth-mode-link:hover {
+  color: #1c69d4 !important;
+}
+
+.fs-auth-wallet {
+  background: rgba(22, 163, 74, 0.08) !important;
+  border: 1px solid rgba(22, 163, 74, 0.2) !important;
+  color: #16a34a !important;
+  font-family: 'Inter', -apple-system, sans-serif !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  border-radius: 4px !important;
+}
+
+.fs-auth-username {
+  background: #f8f8f8 !important;
+  border: 1px solid #e0e0e0 !important;
+  color: #1a1a1a !important;
+  font-family: 'Inter', -apple-system, sans-serif !important;
+  font-size: 12px !important;
+  border-radius: 4px !important;
+}
+
+.fs-auth-signout-btn {
+  background: rgba(220, 38, 38, 0.08) !important;
+  border: 1px solid rgba(220, 38, 38, 0.2) !important;
+  color: #dc2626 !important;
+  font-family: 'Inter', -apple-system, sans-serif !important;
+  font-size: 11px !important;
+  border-radius: 4px !important;
+}
+
 .top-bar-balance {
   font-weight: 700;
   color: var(--ink);
@@ -945,4 +1081,28 @@ body {
   color: var(--muted);
   margin-top: 6px;
   min-height: 16px;
+}
+
+.panel-positions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.panel-position-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 8px;
+  background: var(--surface-soft);
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  font-size: 11px;
+}
+
+.pos-status {
+  font-weight: 600;
+  color: #16a34a;
+  text-transform: uppercase;
+  font-size: 10px;
 }

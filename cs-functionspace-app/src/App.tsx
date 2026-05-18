@@ -1,7 +1,13 @@
 import { useState, useMemo } from 'react';
 import { MOCK_MATCHES, type Match } from './data';
 import { BettingPanel } from './BettingPanel';
+import { LiveBettingPanel } from './LiveBettingPanel';
+import { FunctionSpaceProvider } from '@functionspace/react';
+import { PasswordlessAuthWidget } from '@functionspace/ui';
+import '@functionspace/ui/src/styles/base.css';
 import './index.css';
+
+type Mode = 'test' | 'live';
 
 function formatNum(n: number) { return n >= 1000 ? `${(n / 1000).toFixed(1)}K` : n.toString(); }
 
@@ -20,16 +26,26 @@ function getDateLabel(iso: string) {
 }
 
 /* ── TopBar ── */
-function TopBar() {
+function TopBar({ mode, onModeChange }: { mode: Mode; onModeChange: (m: Mode) => void }) {
   return (
     <div className="top-bar">
       <div className="top-bar-left">
-        <span className="top-bar-wordmark">FunctionSpace</span>
-        <span className="top-bar-tag">CS2</span>
+        <span className="top-bar-wordmark">CounterSpace</span>
+        <span className="top-bar-tag">bet</span>
       </div>
       <div className="top-bar-right">
-        <span className="top-bar-balance">$1,240.00</span>
-        <div className="top-bar-avatar" />
+        <div className="top-bar-mode-toggle">
+          <button className={mode === 'test' ? 'active' : ''} onClick={() => onModeChange('test')}>Test</button>
+          <button className={mode === 'live' ? 'active' : ''} onClick={() => onModeChange('live')}>Live</button>
+        </div>
+        {mode === 'test' ? (
+          <>
+            <span className="top-bar-balance">$1,240.00</span>
+            <div className="top-bar-avatar" />
+          </>
+        ) : (
+          <PasswordlessAuthWidget />
+        )}
       </div>
     </div>
   );
@@ -144,6 +160,7 @@ function MatchCard({ match, onBet }: { match: Match; onBet: (m: Match) => void }
 
 /* ── App ── */
 export default function App() {
+  const [mode, setMode] = useState<Mode>('test');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('live+upcoming');
   const [myBets, setMyBets] = useState(false);
@@ -151,6 +168,7 @@ export default function App() {
 
   const filtered = useMemo(() => {
     let matches = MOCK_MATCHES;
+    if (mode === 'live') matches = matches.filter(m => m.id === 1);
     if (search) {
       const q = search.toLowerCase();
       matches = matches.filter(m =>
@@ -162,7 +180,7 @@ export default function App() {
     if (statusFilter === 'live') matches = matches.filter(m => m.isLive);
     if (myBets) matches = matches.filter(m => m.userHasPosition);
     return matches;
-  }, [search, statusFilter, myBets]);
+  }, [search, statusFilter, myBets, mode]);
 
   const liveMatches = filtered.filter(m => m.isLive);
   const upcomingByDate = useMemo(() => {
@@ -175,10 +193,10 @@ export default function App() {
     return groups;
   }, [filtered]);
 
-  return (
+  const content = (
     <>
-      <TopBar />
-      <FilterStrip search={search} setSearch={setSearch} statusFilter={statusFilter} setStatusFilter={setStatusFilter} myBets={myBets} setMyBets={setMyBets} />
+      <TopBar mode={mode} onModeChange={setMode} />
+      {mode === 'test' && <FilterStrip search={search} setSearch={setSearch} statusFilter={statusFilter} setStatusFilter={setStatusFilter} myBets={myBets} setMyBets={setMyBets} />}
 
       <div className="match-list">
         {/* Live section */}
@@ -208,7 +226,21 @@ export default function App() {
         )}
       </div>
 
-      {bettingMatch && <BettingPanel match={bettingMatch} onClose={() => setBettingMatch(null)} />}
+      {bettingMatch && (
+        mode === 'live'
+          ? <LiveBettingPanel match={bettingMatch} onClose={() => setBettingMatch(null)} />
+          : <BettingPanel match={bettingMatch} onClose={() => setBettingMatch(null)} />
+      )}
     </>
   );
+
+  if (mode === 'live') {
+    return (
+      <FunctionSpaceProvider config={{ baseUrl: import.meta.env.VITE_FS_BASE_URL }}>
+        {content}
+      </FunctionSpaceProvider>
+    );
+  }
+
+  return content;
 }

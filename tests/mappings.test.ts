@@ -645,16 +645,33 @@ describe('queryMarketState', () => {
     expect(result.title).toBe('Root Title');
   });
 
-  it('throws when alpha_vector is missing', async () => {
-    const rawWithoutAlpha = { ...mockMarketStateRaw, alpha_vector: undefined };
+  it('maps state_vector when alpha_vector is missing', async () => {
+    const rawWithStateVector = {
+      ...mockMarketStateRaw,
+      alpha_vector: undefined,
+      state_vector: mockMarketStateRaw.alpha_vector,
+    };
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve(rawWithoutAlpha),
+      json: () => Promise.resolve(rawWithStateVector),
+    });
+
+    const client = makeMockClient();
+    const result = await queryMarketState(client, '123');
+    expect(result.alpha).toEqual(mockMarketStateRaw.alpha_vector);
+    expect(result.consensus).toEqual(expectedMarketState.consensus);
+  });
+
+  it('throws when alpha_vector and state_vector are missing', async () => {
+    const rawWithoutVector = { ...mockMarketStateRaw, alpha_vector: undefined, state_vector: undefined };
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(rawWithoutVector),
     });
 
     const client = makeMockClient();
     await expect(queryMarketState(client, '123')).rejects.toThrow(
-      'Missing alpha_vector',
+      'Missing alpha_vector/state_vector',
     );
   });
 
@@ -1682,21 +1699,42 @@ describe('discoverMarkets', () => {
     );
   });
 
-  it('throws when alpha_vector is missing from list item', async () => {
-    const rawWithoutAlpha = {
+  it('maps state_vector when alpha_vector is missing from list item', async () => {
+    const rawWithStateVector = {
       markets: [{
         ...mockDiscoverMarketsRaw.markets[0],
         alpha_vector: undefined,
+        state_vector: mockDiscoverMarketsRaw.markets[0].alpha_vector,
       }],
     };
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve(rawWithoutAlpha),
+      json: () => Promise.resolve(rawWithStateVector),
+    });
+
+    const client = makeMockClient();
+    const result = await discoverMarkets(client);
+    expect(result).toHaveLength(1);
+    expect(result[0].alpha).toEqual(mockDiscoverMarketsRaw.markets[0].alpha_vector);
+    expect(result[0].consensus).toEqual(expectedDiscoverMarkets[0].consensus);
+  });
+
+  it('throws when alpha_vector and state_vector are missing from list item', async () => {
+    const rawWithoutVector = {
+      markets: [{
+        ...mockDiscoverMarketsRaw.markets[0],
+        alpha_vector: undefined,
+        state_vector: undefined,
+      }],
+    };
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(rawWithoutVector),
     });
 
     const client = makeMockClient();
     await expect(discoverMarkets(client)).rejects.toThrow(
-      'Missing alpha_vector in market list item',
+      'Missing alpha_vector/state_vector in market list item',
     );
   });
 

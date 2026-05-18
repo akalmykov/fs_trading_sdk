@@ -408,3 +408,50 @@ packages/
     ├── market/               MarketStats, MarketCardGrid, MarketExplorer, MarketFilterBar, PositionTable, TimeSales
     └── auth/                 AuthWidget
 ```
+
+## Deploying `demo-app` To Vercel Free
+
+The demo app is a Vite app inside this monorepo. Use the competition dev API endpoint as the only required environment variable.
+
+### 1. Push The Repo To GitHub
+
+Make sure your latest committed changes are pushed to GitHub:
+
+```bash
+git push origin main
+```
+
+### 2. Create A Vercel Project
+
+1. Go to [vercel.com/new](https://vercel.com/new).
+2. Import this GitHub repository.
+3. Select the Free/Hobby plan.
+4. In **Configure Project**, set:
+
+| Setting | Value |
+|---------|-------|
+| Framework Preset | Vite |
+| Root Directory | `demo-app` |
+| Build Command | `npm run build` |
+| Output Directory | `dist` |
+| Install Command | `cd .. && npm install` |
+
+The custom install command is important because `demo-app` depends on the local workspace packages in `packages/*`.
+
+### 3. Add Environment Variable
+
+In Vercel project settings, add:
+
+```bash
+VITE_FS_BASE_URL=https://fs-engine-api-dev.onrender.com
+```
+
+Use this exact URL. The competition dev endpoint has CORS enabled for public deployments.
+
+### 4. Deploy
+
+Click **Deploy**. After the build finishes, open the generated Vercel URL and verify:
+
+1. The Market Explorer loads.
+2. Passwordless sign-in works.
+3. You can place a small test trade and see it appear in positions.
