@@ -187,11 +187,12 @@ function getBrickH(count: number): number {
 
 /* ── Component ── */
 export interface BeliefBuilderProps {
+  bricks: number[];
+  onBricksChange: (bricks: number[]) => void;
   onBeliefChange?: (userP: number[], userMean: number, totalBricks: number) => void;
 }
 
-export function BeliefBuilder({ onBeliefChange }: BeliefBuilderProps) {
-  const [bricks, setBricks] = useState<number[]>(new Array(COLUMNS).fill(0));
+export function BeliefBuilder({ bricks, onBricksChange, onBeliefChange }: BeliefBuilderProps) {
   const [hoverCol, setHoverCol] = useState<number | null>(null);
   const [hint, setHint] = useState(0);
   const [fallingCols, setFallingCols] = useState<Set<number>>(new Set());
@@ -353,7 +354,7 @@ export function BeliefBuilder({ onBeliefChange }: BeliefBuilderProps) {
   const addBrick = useCallback((col: number) => {
     if (Math.floor(GRID_H / (bricks[col] + 1)) < MIN_BRICK_H || totalBricks >= TOTAL_BRICKS_MAX) return;
     const newCount = bricks[col] + 1;
-    setBricks(prev => { const n = [...prev]; n[col]++; return n; });
+    onBricksChange(bricks.map((b, i) => i === col ? b + 1 : b));
     if (totalBricks === 0) setHint(1);
     else if (totalBricks >= 7) setHint(2);
 
@@ -375,7 +376,7 @@ export function BeliefBuilder({ onBeliefChange }: BeliefBuilderProps) {
 
   const removeBrick = useCallback((col: number) => {
     if (bricks[col] <= 0) return;
-    setBricks(prev => { const n = [...prev]; n[col]--; return n; });
+    onBricksChange(bricks.map((b, i) => i === col ? b - 1 : b));
   }, [bricks]);
 
   const edgeColor = edge === null ? '#6b6b6b' : edge > 0.5 ? '#1c69d4' : edge < -0.5 ? '#dc2626' : '#6b6b6b';
@@ -384,7 +385,7 @@ export function BeliefBuilder({ onBeliefChange }: BeliefBuilderProps) {
     <div className="bb-container">
       <div className="bb-context">
         <span>Market consensus: {CONSENSUS_MEAN.toFixed(1)} rounds avg · P(under 23.5): 83.5%</span>
-        {totalBricks > 0 && <button className="bb-reset" onClick={() => setBricks(new Array(COLUMNS).fill(0))}>Reset</button>}
+        {totalBricks > 0 && <button className="bb-reset" onClick={() => onBricksChange(new Array(COLUMNS).fill(0))}>Reset</button>}
       </div>
 
       <div className="bb-counts">

@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import type { Match } from './data';
 import { BeliefBuilder } from './BeliefBuilder';
+
+const COLUMNS = 13;
 
 interface BettingPanelProps {
   match: Match;
@@ -17,6 +19,12 @@ export function BettingPanel({ match, onClose }: BettingPanelProps) {
   const [explainerOpen, setExplainerOpen] = useState(false);
   const [evOpen, setEvOpen] = useState(false);
   const [beliefState, setBeliefState] = useState<{ userMean: number; totalBricks: number } | null>(null);
+  const [allBricks, setAllBricks] = useState<Record<string, number[]>>({});
+
+  const bricks = allBricks[activeMarket] ?? new Array(COLUMNS).fill(0);
+  const handleBricksChange = useCallback((newBricks: number[]) => {
+    setAllBricks(prev => ({ ...prev, [activeMarket]: newBricks }));
+  }, [activeMarket]);
 
   const stakeNum = parseFloat(stake) || 0;
   const canSubmit = (beliefState?.totalBricks ?? 0) >= 3 && stakeNum > 0;
@@ -72,7 +80,7 @@ export function BettingPanel({ match, onClose }: BettingPanelProps) {
               <button
                 key={m}
                 className={`panel-market-pill ${m === activeMarket ? 'active' : ''}`}
-                onClick={() => { setActiveMarket(m); setBricks({}); setSubmitted(false); }}
+                onClick={() => { setActiveMarket(m); setBeliefState(null); setSubmitted(false); }}
               >
                 {m}
                 {match.userHasPosition && m === 'Map 1 Rounds' && <span className="has-position" />}
@@ -89,7 +97,7 @@ export function BettingPanel({ match, onClose }: BettingPanelProps) {
                   <button className="panel-link" onClick={() => setExplainerOpen(!explainerOpen)}>What is this? ›</button>
                 </div>
 
-                <BeliefBuilder onBeliefChange={(_userP, mean, total) => setBeliefState({ userMean: mean, totalBricks: total })} />
+                <BeliefBuilder bricks={bricks} onBricksChange={handleBricksChange} onBeliefChange={(_userP, mean, total) => setBeliefState({ userMean: mean, totalBricks: total })} />
               </div>
 
               {/* Position Summary */}
@@ -139,7 +147,7 @@ export function BettingPanel({ match, onClose }: BettingPanelProps) {
               </div>
               <div className="confirm-actions">
                 <button className="confirm-btn secondary" onClick={onClose}>View in My Bets</button>
-                <button className="confirm-btn primary" onClick={() => { setSubmitted(false); setBricks({}); }}>Bet Another Market →</button>
+                <button className="confirm-btn primary" onClick={() => { setSubmitted(false); setBeliefState(null); }}>Bet Another Market →</button>
               </div>
             </div>
           )}
